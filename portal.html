@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Panel alumno - Aura Calistenia</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="admin-body portal-body">
+    <div class="noise" aria-hidden="true"></div>
+    <header class="nav">
+      <div class="nav-inner">
+        <nav class="nav-group nav-left"></nav>
+        <a class="nav-brand" href="/">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-text">AURA CALISTENIA</span>
+        </a>
+        <nav class="nav-group nav-right">
+          <a href="/">Inicio</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="section">
+      <div class="container admin-header" data-stagger>
+        <p class="eyebrow">Panel alumno</p>
+        <h1>Calistenia con aura épica</h1>
+        <p class="lead">Tu plan aparece día por día con el mismo diseño de la web.</p>
+      </div>
+
+      <div class="container portal-stack">
+        {{PORTAL_CONTENT}}
+      </div>
+    </main>
+  </body>
+</html>

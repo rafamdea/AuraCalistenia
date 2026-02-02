@@ -38,30 +38,15 @@
         <div class="hero-orb" aria-hidden="true"></div>
         <div class="hero-grid" aria-hidden="true"></div>
         <div class="container hero-content" data-stagger>
-          <p class="eyebrow stagger-item">Entrenamiento gratuito - 4 semanas</p>
-          <h1 class="stagger-item">Calistenia con aura épica</h1>
-          <p class="lead stagger-item">
-            Un plan gratuito para desbloquear dominadas, muscle ups, pino, front lever,
-            back lever, fondos y resistencia con una disciplina que se nota desde la
-            primera semana.
-          </p>
+          <p class="eyebrow stagger-item">{{HERO_EYEBROW}}</p>
+          <h1 class="stagger-item">{{HERO_TITLE}}</h1>
+          <p class="lead stagger-item">{{HERO_SUBTITLE}}</p>
           <div class="hero-actions stagger-item">
             <a class="btn glass primary" href="#registro">Registrarse</a>
             <a class="btn glass ghost" href="#bio">Ver la web</a>
           </div>
           <div class="hero-stats" data-stagger>
-            <div class="stat glass-card stagger-item">
-              <span class="stat-number">4</span>
-              <span class="stat-label">Semanas intensas</span>
-            </div>
-            <div class="stat glass-card stagger-item">
-              <span class="stat-number">7</span>
-              <span class="stat-label">Habilidades clave</span>
-            </div>
-            <div class="stat glass-card stagger-item">
-              <span class="stat-number">0</span>
-              <span class="stat-label">Costo de entrada</span>
-            </div>
+            {{HERO_STATS}}
           </div>
         </div>
       </section>
@@ -69,28 +54,16 @@
       <section id="bio" class="section bio reveal">
         <div class="container bio-grid" data-stagger>
           <div class="bio-text stagger-item">
-            <p class="eyebrow">El creador</p>
-            <h2>Rafa Montero de Espinosa</h2>
-            <p>
-              Teniente de Navío, 27 años. En marzo de 2024 cambié el running por la
-              calistenia desde cero: no podía hacer ni una dominada ni un fondo. En abril
-              empecé con entrenador personal y un plan de fuerza base, templando disciplina
-              militar y obsesión por la técnica.
-            </p>
-            <p>
-              En octubre de 2025 volví a parques, barras y suelo. En pocos meses
-              desbloqueé pino, front lever y back lever, y elevé la resistencia. Debuté
-              en Málaga el 19 de diciembre y hoy me preparo para competir en resistencia
-              con la meta de estar entre los mejores. Mi sello es la disciplina: cero
-              alcohol, cero tabaco y una vida dedicada a progresar cada día.
-            </p>
-            <div class="signature glass">Entrenador: Rafa Montero de Espinosa</div>
+            <p class="eyebrow">{{BIO_EYEBROW}}</p>
+            <h2>{{BIO_NAME}}</h2>
+            {{BIO_PARAGRAPHS}}
+            <div class="signature glass">{{BIO_SIGNATURE}}</div>
           </div>
           <div class="bio-portrait stagger-item">
             <div class="portrait-frame glass-card">
-              <img src="FOTOS/IMAGEN EPICA CREADOR 1.jpg" alt="Rafa Montero de Espinosa en acción">
+              <img src="{{BIO_IMAGE}}" alt="Rafa Montero de Espinosa en acción">
             </div>
-            <div class="portrait-caption">Foto principal del creador</div>
+            <div class="portrait-caption">{{BIO_IMAGE_CAPTION}}</div>
           </div>
         </div>
       </section>
@@ -99,37 +72,28 @@
         <div class="container">
           <div class="section-header" data-stagger>
             <p class="eyebrow stagger-item">Programa</p>
-            <h2 class="stagger-item">Evolución del pino libre</h2>
-            <p class="lead stagger-item">
-              En este programa trabajamos los puntos débiles que desbloquean cada skill.
-              Aquí tienes la evolución del pino libre con las 4 progresiones clave.
-            </p>
+            <h2 class="stagger-item">{{PROGRAM_TITLE}}</h2>
+            <p class="lead stagger-item">{{PROGRAM_LEAD}}</p>
           </div>
 
           <div class="program-spotlight" data-stagger>
             <div class="program-highlight glass-card stagger-item">
-              <h3>Progresiones que desbloquean el equilibrio</h3>
-              <p>
-                Cada fase ataca un punto crítico: fuerza de empuje, entrada al pino,
-                potencia en flexión asistida y control total de la línea corporal.
-              </p>
+              <h3>{{PROGRAM_HIGHLIGHT_TITLE}}</h3>
+              <p>{{PROGRAM_HIGHLIGHT_TEXT}}</p>
               <ul class="program-list">
-                <li>Empuje vertical y fuerza de hombro.</li>
-                <li>Entrada al pino con asistencia y control.</li>
-                <li>Flexiones de pino asistidas para potencia.</li>
-                <li>Tensión corporal y equilibrio estable con las manos.</li>
+                {{PROGRAM_BULLETS}}
               </ul>
             </div>
             <div class="program-image glass-card stagger-item">
-              <img src="FOTOS/FOTO PINO.jpg" alt="Rafa en pino libre">
-              <span class="program-image-caption">Pino libre en acción</span>
+              <img src="{{PROGRAM_IMAGE}}" alt="Rafa en pino libre">
+              <span class="program-image-caption">{{PROGRAM_IMAGE_CAPTION}}</span>
             </div>
           </div>
 
           <div class="progression-grid" data-stagger>
             <article class="progression-card glass-card stagger-item">
               <div class="progression-media">
-                <video src="PROGRESIÓN PINO/PROGRESIÓN 1.MOV" autoplay loop muted playsinline preload="metadata"></video>
+                <video src="progresion-pino/progresion-1.mp4" autoplay loop muted playsinline preload="metadata"></video>
               </div>
               <div class="progression-meta">
                 <span class="progression-step">Progresión 1</span>
@@ -139,7 +103,7 @@
             </article>
             <article class="progression-card glass-card stagger-item">
               <div class="progression-media">
-                <video src="PROGRESIÓN PINO/PROGRESIÓN 2.MOV" autoplay loop muted playsinline preload="metadata"></video>
+                <video src="progresion-pino/progresion-2.mp4" autoplay loop muted playsinline preload="metadata"></video>
               </div>
               <div class="progression-meta">
                 <span class="progression-step">Progresión 2</span>
@@ -149,7 +113,7 @@
             </article>
             <article class="progression-card glass-card stagger-item">
               <div class="progression-media">
-                <video src="PROGRESIÓN PINO/PROGRESION 3.MOV" autoplay loop muted playsinline preload="metadata"></video>
+                <video src="progresion-pino/progresion-3.mp4" autoplay loop muted playsinline preload="metadata"></video>
               </div>
               <div class="progression-meta">
                 <span class="progression-step">Progresión 3</span>
@@ -159,7 +123,7 @@
             </article>
             <article class="progression-card glass-card stagger-item">
               <div class="progression-media">
-                <video src="PROGRESIÓN PINO/PROGRESIÓN 4.mov" autoplay loop muted playsinline preload="metadata"></video>
+                <video src="progresion-pino/progresion-4.mp4" autoplay loop muted playsinline preload="metadata"></video>
               </div>
               <div class="progression-meta">
                 <span class="progression-step">Progresión 4</span>
@@ -262,7 +226,7 @@
             <!-- FALLBACK_VIDEOS_START -->
             <div class="video-card tall stagger-item">
               <div class="video-thumb">
-                <video src="FOTOS/VIDEO DOMINADAS.MOV" autoplay loop muted playsinline preload="metadata"></video>
+                <video src="FOTOS/dominadas.mp4" autoplay loop muted playsinline preload="metadata"></video>
               </div>
               <div class="video-meta">
                 <span class="tag glass-pill">Dominadas</span>
@@ -272,7 +236,7 @@
             </div>
             <div class="video-card wide stagger-item">
               <div class="video-thumb">
-                <video src="FOTOS/VIDEO MUSCLE UP.MOV" autoplay loop muted playsinline preload="metadata"></video>
+                <video src="FOTOS/muscle-up.mp4" autoplay loop muted playsinline preload="metadata"></video>
               </div>
               <div class="video-meta">
                 <span class="tag glass-pill">Muscle up</span>
@@ -282,7 +246,7 @@
             </div>
             <div class="video-card stagger-item">
               <div class="video-thumb">
-                <video src="FOTOS/VIDEO PINO.mov" autoplay loop muted playsinline preload="metadata"></video>
+                <video src="FOTOS/pino-video.mp4" autoplay loop muted playsinline preload="metadata"></video>
               </div>
               <div class="video-meta">
                 <span class="tag glass-pill">Pino</span>
@@ -292,7 +256,7 @@
             </div>
             <div class="video-card tall stagger-item">
               <div class="video-thumb">
-                <video src="FOTOS/video front LEVER.MOV" autoplay loop muted playsinline preload="metadata"></video>
+                <video src="FOTOS/front-lever.mp4" autoplay loop muted playsinline preload="metadata"></video>
               </div>
               <div class="video-meta">
                 <span class="tag glass-pill">Front lever</span>
@@ -302,7 +266,7 @@
             </div>
             <div class="video-card wide stagger-item">
               <div class="video-thumb">
-                <video src="FOTOS/VIDEO FONDOS.mov" autoplay loop muted playsinline preload="metadata"></video>
+                <video src="FOTOS/fondos.mp4" autoplay loop muted playsinline preload="metadata"></video>
               </div>
               <div class="video-meta">
                 <span class="tag glass-pill">Fondos</span>
@@ -312,7 +276,7 @@
             </div>
             <div class="video-card stagger-item">
               <div class="video-thumb">
-                <video src="FOTOS/VIDEO BACK LEVER.MOV" autoplay loop muted playsinline preload="metadata"></video>
+                <video src="FOTOS/back-lever.mp4" autoplay loop muted playsinline preload="metadata"></video>
               </div>
               <div class="video-meta">
                 <span class="tag glass-pill">Back lever</span>
@@ -407,14 +371,7 @@
           </div>
 
           <div class="sponsor-grid" data-stagger>
-            <div class="sponsor-tile glass-card stagger-item">
-              <img class="sponsor-logo" src="LOGOS/vitastrong.jpeg" alt="Vitastrong España">
-              <span class="sponsor-name">VITASTRONG ESPAÑA</span>
-            </div>
-            <div class="sponsor-tile glass-card stagger-item">
-              <img class="sponsor-logo" src="LOGOS/pullupanddip.png" alt="Pullup and Dip">
-              <span class="sponsor-name">PULLUP&amp;DIP</span>
-            </div>
+            {{SPONSORS}}
           </div>
         </div>
       </section>
@@ -427,10 +384,10 @@
           <p>Entrena en vivo, recibe seguimiento y accede a eventos privados.</p>
         </div>
         <div class="contact-card glass-card">
-          <p><strong>Email:</strong> rafamdeeales@gmail.com</p>
-          <p><strong>Teléfono:</strong> +34 644 660 583</p>
-          <p><strong>Ciudad:</strong> Sevilla, España</p>
-          <p><strong>Instagram:</strong> @rafamdea</p>
+          <p><strong>Email:</strong> {{CONTACT_EMAIL}}</p>
+          <p><strong>Teléfono:</strong> {{CONTACT_PHONE}}</p>
+          <p><strong>Ciudad:</strong> {{CONTACT_CITY}}</p>
+          <p><strong>Instagram:</strong> {{CONTACT_INSTAGRAM}}</p>
         </div>
       </div>
       <div class="footer-bottom">Aura Calistenia - 2026</div>

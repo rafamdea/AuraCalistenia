@@ -1160,6 +1160,13 @@ h3 {
   padding: 140px 0 40px;
 }
 
+.admin-stack,
+.portal-stack {
+  display: grid;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
 .admin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -1169,6 +1176,95 @@ h3 {
 .admin-card {
   display: grid;
   gap: 14px;
+}
+
+.admin-wide {
+  grid-column: 1 / -1;
+}
+
+.form-section {
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(74, 241, 173, 0.16);
+  background: rgba(6, 16, 11, 0.55);
+  display: grid;
+  gap: 12px;
+}
+
+.form-section h4 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.plan-week-block {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(74, 241, 173, 0.15);
+  background: rgba(5, 12, 9, 0.6);
+  display: grid;
+  gap: 12px;
+}
+
+.plan-days-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.plan-day {
+  display: grid;
+  gap: 8px;
+}
+
+.plan-day textarea {
+  min-height: 120px;
+}
+
+.plan-empty {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.plan-items {
+  display: grid;
+  gap: 10px;
+}
+
+.plan-item {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(6, 18, 12, 0.7);
+  border: 1px solid rgba(74, 241, 173, 0.14);
+  display: grid;
+  gap: 6px;
+}
+
+.plan-item h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #fff;
+}
+
+.plan-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.plan-meta span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(74, 241, 173, 0.12);
+  border: 1px solid rgba(74, 241, 173, 0.2);
+}
+
+.portal-body {
+  background: #050706;
 }
 
 .admin-list {
