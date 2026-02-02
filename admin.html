@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin - Aura Calistenia</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="admin-body">
+    <div class="noise" aria-hidden="true"></div>
+    <header class="nav">
+      <div class="nav-inner">
+        <nav class="nav-group nav-left"></nav>
+        <a class="nav-brand" href="/">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-text">AURA CALISTENIA</span>
+        </a>
+        <nav class="nav-group nav-right">
+          <a href="/">Inicio</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="section">
+      <div class="container admin-header" data-stagger>
+        <p class="eyebrow">Panel admin</p>
+        <h1>Control de eventos y vídeos</h1>
+        {{ADMIN_MESSAGE}}
+      </div>
+
+      <div class="container admin-grid">
+        <div class="admin-card glass-card">
+          <h3>Solicitudes de alumnos</h3>
+          <ul class="admin-list">
+            {{APPLICATION_LIST}}
+          </ul>
+        </div>
+
+        <div class="admin-card glass-card">
+          <h3>Agregar evento</h3>
+          <form class="admin-form" action="/admin/events/add" method="post">
+            <div class="form-field">
+              <label for="event_title">Título</label>
+              <input id="event_title" name="title" type="text" required>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label for="event_date">Fecha</label>
+                <input id="event_date" name="date" type="text" placeholder="Ej: 16-19 ABR 2026" required>
+              </div>
+              <div class="form-field">
+                <label for="event_location">Lugar</label>
+                <input id="event_location" name="location" type="text" placeholder="Ciudad, País" required>
+              </div>
+            </div>
+            <div class="form-field">
+              <label for="event_desc">Descripción</label>
+              <input id="event_desc" name="description" type="text" required>
+            </div>
+            <div class="form-field">
+              <label for="event_tag">Etiqueta</label>
+              <input id="event_tag" name="tag" type="text" placeholder="Nacional o Europa" required>
+            </div>
+            <button class="btn glass primary" type="submit">Guardar evento</button>
+          </form>
+        </div>
+
+        <div class="admin-card glass-card">
+          <h3>Eventos actuales</h3>
+          <ul class="admin-list">
+            {{EVENT_LIST}}
+          </ul>
+        </div>
+
+        <div class="admin-card glass-card">
+          <h3>Agregar vídeo</h3>
+          <form class="admin-form" action="/admin/videos/add" method="post" enctype="multipart/form-data">
+            <div class="form-field">
+              <label for="video_title">Título</label>
+              <input id="video_title" name="title" type="text" required>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label for="video_tag">Etiqueta</label>
+                <input id="video_tag" name="tag" type="text" required>
+              </div>
+              <div class="form-field">
+                <label for="video_layout">Diseño</label>
+                <select id="video_layout" name="layout">
+                  <option value="">Normal</option>
+                  <option value="tall">Tall</option>
+                  <option value="wide">Wide</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-field">
+              <label for="video_desc">Descripción</label>
+              <input id="video_desc" name="description" type="text" required>
+            </div>
+            <div class="form-field">
+              <label for="video_url">URL externa (opcional)</label>
+              <input id="video_url" name="video_url" type="url" placeholder="https://">
+            </div>
+            <div class="form-field">
+              <label for="video_file">Subir archivo (mp4, webm, jpg)</label>
+              <input id="video_file" name="video_file" type="file" accept="video/mp4,video/webm,video/ogg,image/png,image/jpeg,image/webp">
+            </div>
+            <button class="btn glass primary" type="submit">Guardar video</button>
+          </form>
+          <p class="admin-note">Si no subes archivo, se mostrará un placeholder con enlace.</p>
+        </div>
+
+        <div class="admin-card glass-card">
+          <h3>Vídeos actuales</h3>
+          <ul class="admin-list">
+            {{VIDEO_LIST}}
+          </ul>
+        </div>
+
+        <div class="admin-card glass-card">
+          <h3>Configuración SMTP</h3>
+          <form class="admin-form" action="/admin/settings" method="post">
+            <div class="form-row">
+              <div class="form-field">
+                <label for="smtp_host">Servidor SMTP</label>
+                <input id="smtp_host" name="smtp_host" type="text" value="{{SMTP_HOST}}">
+              </div>
+              <div class="form-field">
+                <label for="smtp_port">Puerto</label>
+                <input id="smtp_port" name="smtp_port" type="number" value="{{SMTP_PORT}}">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label for="smtp_user">Usuario SMTP</label>
+                <input id="smtp_user" name="smtp_user" type="text" value="{{SMTP_USER}}">
+              </div>
+              <div class="form-field">
+                <label for="smtp_pass">Contraseña de aplicación</label>
+                <input id="smtp_pass" name="smtp_pass" type="password" value="{{SMTP_PASS}}">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label for="smtp_from">Nombre remitente</label>
+                <input id="smtp_from" name="smtp_from" type="text" value="{{SMTP_FROM}}">
+              </div>
+              <div class="form-field">
+                <label for="smtp_admin">Email admin</label>
+                <input id="smtp_admin" name="smtp_admin" type="email" value="{{SMTP_ADMIN}}">
+              </div>
+            </div>
+            <div class="form-row">
+              <label class="checkbox-field">
+                <input type="checkbox" name="smtp_enabled" {{SMTP_ENABLED}}>
+                Activar envío SMTP
+              </label>
+              <label class="checkbox-field">
+                <input type="checkbox" name="smtp_tls" {{SMTP_TLS}}>
+                Usar STARTTLS
+              </label>
+            </div>
+            <button class="btn glass primary" type="submit">Guardar SMTP</button>
+          </form>
+        </div>
+
+        <div class="admin-card glass-card">
+          <h3>Sesión</h3>
+          <form class="admin-form" action="/admin/logout" method="post">
+            <button class="btn glass ghost" type="submit">Cerrar sesión</button>
+          </form>
+          <p class="admin-note">Usuario y contraseña por defecto: admin / admin.</p>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>
