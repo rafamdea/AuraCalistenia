@@ -315,8 +315,8 @@ def get_storage_status() -> dict:
     if not db_enabled():
         return {
             "mode": "local",
-            "title": "Almacenamiento: JSON local (no persistente en deploy)",
-            "detail": "DATABASE_URL no está definido en este servicio.",
+            "title": "Modo temporal (JSON local)",
+            "detail": "Este modo se borra al redeploy. Configura DATABASE_URL en Render para guardar de forma persistente.",
         }
     try:
         with db_connect() as conn:
@@ -326,14 +326,15 @@ def get_storage_status() -> dict:
         count = int(row[0]) if row else 0
         return {
             "mode": "db_ok",
-            "title": "Almacenamiento: PostgreSQL (Neon) activo",
-            "detail": f"Tabla {DB_TABLE} accesible. Claves guardadas: {count}.",
+            "title": "Neon conectado",
+            "detail": f"Guardado persistente activo. Registros disponibles: {count}.",
         }
     except Exception as exc:
         return {
             "mode": "db_error",
-            "title": "Almacenamiento: error conectando a Neon",
-            "detail": f"{type(exc).__name__}: {exc}",
+            "title": "Error conectando con Neon",
+            "detail": "Se está usando JSON local temporal hasta recuperar la conexión.",
+            "debug": f"{type(exc).__name__}: {exc}",
         }
 
 
@@ -1181,6 +1182,19 @@ def render_coach_dashboard(applications: list[dict], storage_status: dict) -> st
         storage_class = "storage-ok"
     elif storage_mode == "db_error":
         storage_class = "storage-error"
+    storage_title = html.escape(str(storage_status.get("title", "")))
+    storage_detail = html.escape(str(storage_status.get("detail", "")))
+    storage_debug = html.escape(str(storage_status.get("debug", "")))
+    storage_lines = [
+        f'  <div class="storage-pill {storage_class}">',
+        '    <span class="storage-pill-label">Estado de guardado</span>',
+        f"    <strong>{storage_title}</strong>",
+        f"    <span>{storage_detail}</span>",
+    ]
+    if storage_mode == "db_error" and storage_debug:
+        storage_lines.append(f'    <span class="storage-pill-debug">{storage_debug}</span>')
+    storage_lines.append("  </div>")
+    storage_html = "\n".join(storage_lines)
     return "\n".join(
         [
             '<div class="admin-card glass-card admin-wide coach-dashboard">',
@@ -1188,8 +1202,7 @@ def render_coach_dashboard(applications: list[dict], storage_status: dict) -> st
             "    <h3>Gestión de alumnos</h3>",
             '    <a class="btn glass ghost small" href="/admin/export/json">⬇ Descargar todos los JSON en ZIP</a>',
             "  </div>",
-            f'  <div class="storage-pill {storage_class}"><strong>{html.escape(str(storage_status.get("title","")))}'
-            f'</strong><span>{html.escape(str(storage_status.get("detail","")))}</span></div>',
+            storage_html,
             "  <div class=\"coach-stats\">",
             f"    <span>Total de alumnos: <strong>{total}</strong></span>",
             f"    <span>Activos: <strong>{approved}</strong></span>",
@@ -1308,7 +1321,9 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
             if rest_flag or not isinstance(items, list) or not items:
                 parts.append('          <p class="plan-empty">Descanso o movilidad.</p>')
             if not rest_flag and isinstance(items, list) and items:
-                parts.append('          <div class="plan-items">')
+                if len(items) > 1:
+                    parts.append('          <span class="portal-scroll-hint">Desliza para ver más ejercicios →</span>')
+                parts.append('          <div class="plan-items portal-items-row">')
                 for item_index, item in enumerate(items, start=1):
                     if not isinstance(item, dict):
                         continue
@@ -1636,63 +1651,84 @@ def render_event_list(events: list[dict]) -> str:
     total = len(events)
     for index, event in enumerate(events):
         event_id = str(event.get("id", ""))
-        title = html.escape(str(event.get("title", "")))
-        date = html.escape(str(event.get("date", "")))
-        location = html.escape(str(event.get("location", "")))
-        description = html.escape(str(event.get("description", "")))
-        tag = html.escape(str(event.get("tag", "")))
+        raw_title = str(event.get("title", "")).strip()
+        raw_date = str(event.get("date", "")).strip()
+        raw_location = str(event.get("location", "")).strip()
+        raw_description = str(event.get("description", "")).strip()
+        raw_tag = str(event.get("tag", "")).strip()
+        title = html.escape(raw_title)
+        date = html.escape(raw_date)
+        location = html.escape(raw_location)
+        description = html.escape(raw_description)
+        tag = html.escape(raw_tag)
+        summary_parts = [part for part in [raw_date, raw_location] if part]
+        summary = html.escape(" · ".join(summary_parts)) if summary_parts else "Sin fecha ni lugar"
+        title_display = title or "Competición sin título"
+        tag_display = tag or "Sin etiqueta"
+        open_attr = " open" if index == 0 else ""
         move_up_disabled = " disabled" if index == 0 else ""
         move_down_disabled = " disabled" if index == total - 1 else ""
         items.append(
             "\n".join(
                 [
-                    '<li class="admin-item admin-edit-item">',
-                    "  <form class=\"admin-form admin-inline-edit\" action=\"/admin/events/update\" method=\"post\">",
-                    f"    <input type=\"hidden\" name=\"id\" value=\"{html.escape(event_id)}\">",
-                    "    <div class=\"form-row\">",
-                    "      <div class=\"form-field\">",
-                    "        <label>Título</label>",
-                    f"        <input name=\"title\" type=\"text\" value=\"{title}\" required>",
+                    '<li class="admin-item admin-edit-item admin-collapsible-item">',
+                    f'  <details class="admin-collapsible"{open_attr}>',
+                    '    <summary class="admin-collapsible-summary">',
+                    '      <div class="admin-collapsible-main">',
+                    f"        <strong>{title_display}</strong>",
+                    f"        <span>{summary}</span>",
                     "      </div>",
-                    "      <div class=\"form-field\">",
-                    "        <label>Etiqueta</label>",
-                    f"        <input name=\"tag\" type=\"text\" value=\"{tag}\" required>",
+                    f"      <span class=\"admin-collapsible-tag\">{tag_display}</span>",
+                    "    </summary>",
+                    '    <div class="admin-collapsible-content">',
+                    "      <form class=\"admin-form admin-inline-edit\" action=\"/admin/events/update\" method=\"post\">",
+                    f"        <input type=\"hidden\" name=\"id\" value=\"{html.escape(event_id)}\">",
+                    "        <div class=\"form-row\">",
+                    "          <div class=\"form-field\">",
+                    "            <label>Título</label>",
+                    f"            <input name=\"title\" type=\"text\" value=\"{title}\" required>",
+                    "          </div>",
+                    "          <div class=\"form-field\">",
+                    "            <label>Etiqueta</label>",
+                    f"            <input name=\"tag\" type=\"text\" value=\"{tag}\" required>",
+                    "          </div>",
+                    "        </div>",
+                    "        <div class=\"form-row\">",
+                    "          <div class=\"form-field\">",
+                    "            <label>Fecha</label>",
+                    f"            <input name=\"date\" type=\"text\" value=\"{date}\" required>",
+                    "          </div>",
+                    "          <div class=\"form-field\">",
+                    "            <label>Lugar</label>",
+                    f"            <input name=\"location\" type=\"text\" value=\"{location}\" required>",
+                    "          </div>",
+                    "        </div>",
+                    "        <div class=\"form-field\">",
+                    "          <label>Descripción</label>",
+                    f"          <input name=\"description\" type=\"text\" value=\"{description}\" required>",
+                    "        </div>",
+                    "        <div class=\"admin-actions\">",
+                    "          <button class=\"btn glass primary small\" type=\"submit\">Guardar</button>",
+                    "        </div>",
+                    "      </form>",
+                    "      <div class=\"admin-actions\">",
+                    "        <form class=\"admin-inline-form\" action=\"/admin/events/move\" method=\"post\">",
+                    f"          <input type=\"hidden\" name=\"id\" value=\"{html.escape(event_id)}\">",
+                    "          <input type=\"hidden\" name=\"direction\" value=\"up\">",
+                    f"          <button class=\"btn glass ghost small\" type=\"submit\"{move_up_disabled}>Subir</button>",
+                    "        </form>",
+                    "        <form class=\"admin-inline-form\" action=\"/admin/events/move\" method=\"post\">",
+                    f"          <input type=\"hidden\" name=\"id\" value=\"{html.escape(event_id)}\">",
+                    "          <input type=\"hidden\" name=\"direction\" value=\"down\">",
+                    f"          <button class=\"btn glass ghost small\" type=\"submit\"{move_down_disabled}>Bajar</button>",
+                    "        </form>",
+                    "        <form class=\"admin-inline-form\" action=\"/admin/events/delete\" method=\"post\">",
+                    f"          <input type=\"hidden\" name=\"id\" value=\"{html.escape(event_id)}\">",
+                    "          <button class=\"btn glass ghost small\" type=\"submit\">Eliminar</button>",
+                    "        </form>",
                     "      </div>",
                     "    </div>",
-                    "    <div class=\"form-row\">",
-                    "      <div class=\"form-field\">",
-                    "        <label>Fecha</label>",
-                    f"        <input name=\"date\" type=\"text\" value=\"{date}\" required>",
-                    "      </div>",
-                    "      <div class=\"form-field\">",
-                    "        <label>Lugar</label>",
-                    f"        <input name=\"location\" type=\"text\" value=\"{location}\" required>",
-                    "      </div>",
-                    "    </div>",
-                    "    <div class=\"form-field\">",
-                    "      <label>Descripción</label>",
-                    f"      <input name=\"description\" type=\"text\" value=\"{description}\" required>",
-                    "    </div>",
-                    "    <div class=\"admin-actions\">",
-                    "      <button class=\"btn glass primary small\" type=\"submit\">Guardar</button>",
-                    "    </div>",
-                    "  </form>",
-                    "  <div class=\"admin-actions\">",
-                    "    <form class=\"admin-inline-form\" action=\"/admin/events/move\" method=\"post\">",
-                    f"      <input type=\"hidden\" name=\"id\" value=\"{html.escape(event_id)}\">",
-                    "      <input type=\"hidden\" name=\"direction\" value=\"up\">",
-                    f"      <button class=\"btn glass ghost small\" type=\"submit\"{move_up_disabled}>Subir</button>",
-                    "    </form>",
-                    "    <form class=\"admin-inline-form\" action=\"/admin/events/move\" method=\"post\">",
-                    f"      <input type=\"hidden\" name=\"id\" value=\"{html.escape(event_id)}\">",
-                    "      <input type=\"hidden\" name=\"direction\" value=\"down\">",
-                    f"      <button class=\"btn glass ghost small\" type=\"submit\"{move_down_disabled}>Bajar</button>",
-                    "    </form>",
-                    "    <form class=\"admin-inline-form\" action=\"/admin/events/delete\" method=\"post\">",
-                    f"      <input type=\"hidden\" name=\"id\" value=\"{html.escape(event_id)}\">",
-                    "      <button class=\"btn glass ghost small\" type=\"submit\">Eliminar</button>",
-                    "    </form>",
-                    "  </div>",
+                    "  </details>",
                     "</li>",
                 ]
             )
@@ -1705,13 +1741,27 @@ def render_video_list(videos: list[dict]) -> str:
     total = len(videos)
     for index, video in enumerate(videos):
         video_id = str(video.get("id", ""))
-        title = html.escape(str(video.get("title", "")))
-        tag = html.escape(str(video.get("tag", "")))
-        description = html.escape(str(video.get("description", "")))
+        raw_title = str(video.get("title", "")).strip()
+        raw_tag = str(video.get("tag", "")).strip()
+        raw_description = str(video.get("description", "")).strip()
         raw_layout = str(video.get("layout", "")).strip()
+        raw_video_url = str(video.get("video_url", "")).strip()
+        raw_file = str(video.get("file", "")).strip()
+        title = html.escape(raw_title)
+        tag = html.escape(raw_tag)
+        description = html.escape(raw_description)
         layout = html.escape(raw_layout or "normal")
-        video_url = html.escape(str(video.get("video_url", "")))
-        file_label = html.escape(str(video.get("file", "")) or "-")
+        video_url = html.escape(raw_video_url)
+        file_label = html.escape(raw_file or "-")
+        title_display = title or "Vídeo sin título"
+        tag_display = tag or "Sin etiqueta"
+        layout_label = {"tall": "Tall", "wide": "Wide"}.get(raw_layout, "Normal")
+        source_label = "Archivo subido" if raw_file else ("URL externa" if raw_video_url else "Sin fuente")
+        meta_summary = html.escape(f"{raw_tag or 'Sin etiqueta'} · {layout_label} · {source_label}")
+        search_blob = html.escape(
+            " ".join([raw_title, raw_tag, raw_description, raw_video_url, raw_file]).lower()
+        )
+        open_attr = " open" if index == 0 else ""
         move_up_disabled = " disabled" if index == 0 else ""
         move_down_disabled = " disabled" if index == total - 1 else ""
         layout_options = "".join(
@@ -1724,70 +1774,82 @@ def render_video_list(videos: list[dict]) -> str:
         items.append(
             "\n".join(
                 [
-                    '<li class="admin-item admin-edit-item">',
-                    "  <form class=\"admin-form admin-inline-edit\" action=\"/admin/videos/update\" method=\"post\" enctype=\"multipart/form-data\">",
-                    f"    <input type=\"hidden\" name=\"id\" value=\"{html.escape(video_id)}\">",
-                    "    <div class=\"form-row\">",
-                    "      <div class=\"form-field\">",
-                    "        <label>Título</label>",
-                    f"        <input name=\"title\" type=\"text\" value=\"{title}\" required>",
+                    f'<li class="admin-item admin-edit-item admin-collapsible-item admin-media-item" data-search="{search_blob}">',
+                    f'  <details class="admin-collapsible"{open_attr}>',
+                    '    <summary class="admin-collapsible-summary">',
+                    '      <div class="admin-collapsible-main">',
+                    f"        <strong>{title_display}</strong>",
+                    f"        <span>{meta_summary}</span>",
                     "      </div>",
-                    "      <div class=\"form-field\">",
-                    "        <label>Etiqueta</label>",
-                    f"        <input name=\"tag\" type=\"text\" value=\"{tag}\" required>",
+                    f"      <span class=\"admin-collapsible-tag\">{layout}</span>",
+                    "    </summary>",
+                    '    <div class="admin-collapsible-content">',
+                    "      <form class=\"admin-form admin-inline-edit\" action=\"/admin/videos/update\" method=\"post\" enctype=\"multipart/form-data\">",
+                    f"        <input type=\"hidden\" name=\"id\" value=\"{html.escape(video_id)}\">",
+                    "        <div class=\"form-row\">",
+                    "          <div class=\"form-field\">",
+                    "            <label>Título</label>",
+                    f"            <input name=\"title\" type=\"text\" value=\"{title}\" required>",
+                    "          </div>",
+                    "          <div class=\"form-field\">",
+                    "            <label>Etiqueta</label>",
+                    f"            <input name=\"tag\" type=\"text\" value=\"{tag}\" required>",
+                    "          </div>",
+                    "        </div>",
+                    "        <div class=\"form-row\">",
+                    "          <div class=\"form-field\">",
+                    "            <label>Descripción</label>",
+                    f"            <input name=\"description\" type=\"text\" value=\"{description}\" required>",
+                    "          </div>",
+                    "          <div class=\"form-field\">",
+                    "            <label>Diseño</label>",
+                    f"            <select name=\"layout\">{layout_options}</select>",
+                    "          </div>",
+                    "        </div>",
+                    "        <div class=\"form-row\">",
+                    "          <div class=\"form-field\">",
+                    "            <label>URL externa</label>",
+                    f"            <input name=\"video_url\" type=\"text\" value=\"{video_url}\">",
+                    "          </div>",
+                    "          <div class=\"form-field\">",
+                    "            <label>Archivo actual</label>",
+                    f"            <input type=\"text\" value=\"{file_label}\" readonly>",
+                    "          </div>",
+                    "        </div>",
+                    "        <div class=\"form-row\">",
+                    "          <div class=\"form-field\">",
+                    "            <label>Reemplazar archivo</label>",
+                    "            <input name=\"video_file\" type=\"file\" accept=\"video/mp4,video/webm,video/ogg,image/png,image/jpeg,image/webp\">",
+                    "          </div>",
+                    "          <div class=\"form-field\">",
+                    "            <label>Eliminar archivo actual</label>",
+                    "            <label class=\"checkbox-field\"><input type=\"checkbox\" name=\"remove_file\"> Quitar archivo subido</label>",
+                    "          </div>",
+                    "        </div>",
+                    "        <div class=\"admin-actions\">",
+                    "          <button class=\"btn glass primary small\" type=\"submit\">Guardar</button>",
+                    "        </div>",
+                    "      </form>",
+                    "      <div class=\"admin-actions\">",
+                    "        <form class=\"admin-inline-form\" action=\"/admin/videos/move\" method=\"post\">",
+                    f"          <input type=\"hidden\" name=\"id\" value=\"{html.escape(video_id)}\">",
+                    "          <input type=\"hidden\" name=\"direction\" value=\"up\">",
+                    f"          <button class=\"btn glass ghost small\" type=\"submit\"{move_up_disabled}>Subir</button>",
+                    "        </form>",
+                    "        <form class=\"admin-inline-form\" action=\"/admin/videos/move\" method=\"post\">",
+                    f"          <input type=\"hidden\" name=\"id\" value=\"{html.escape(video_id)}\">",
+                    "          <input type=\"hidden\" name=\"direction\" value=\"down\">",
+                    f"          <button class=\"btn glass ghost small\" type=\"submit\"{move_down_disabled}>Bajar</button>",
+                    "        </form>",
+                    "        <form class=\"admin-inline-form\" action=\"/admin/videos/delete\" method=\"post\">",
+                    f"          <input type=\"hidden\" name=\"id\" value=\"{html.escape(video_id)}\">",
+                    "          <button class=\"btn glass ghost small\" type=\"submit\">Eliminar</button>",
+                    "        </form>",
                     "      </div>",
+                    "      <span class=\"admin-note\">Etiqueta actual: "
+                    f"{tag_display} · Diseño: {layout}</span>",
                     "    </div>",
-                    "    <div class=\"form-row\">",
-                    "      <div class=\"form-field\">",
-                    "        <label>Descripción</label>",
-                    f"        <input name=\"description\" type=\"text\" value=\"{description}\" required>",
-                    "      </div>",
-                    "      <div class=\"form-field\">",
-                    "        <label>Diseño</label>",
-                    f"        <select name=\"layout\">{layout_options}</select>",
-                    "      </div>",
-                    "    </div>",
-                    "    <div class=\"form-row\">",
-                    "      <div class=\"form-field\">",
-                    "        <label>URL externa</label>",
-                    f"        <input name=\"video_url\" type=\"text\" value=\"{video_url}\">",
-                    "      </div>",
-                    "      <div class=\"form-field\">",
-                    "        <label>Archivo actual</label>",
-                    f"        <input type=\"text\" value=\"{file_label}\" readonly>",
-                    "      </div>",
-                    "    </div>",
-                    "    <div class=\"form-row\">",
-                    "      <div class=\"form-field\">",
-                    "        <label>Reemplazar archivo</label>",
-                    "        <input name=\"video_file\" type=\"file\" accept=\"video/mp4,video/webm,video/ogg,image/png,image/jpeg,image/webp\">",
-                    "      </div>",
-                    "      <div class=\"form-field\">",
-                    "        <label>Eliminar archivo actual</label>",
-                    "        <label class=\"checkbox-field\"><input type=\"checkbox\" name=\"remove_file\"> Quitar archivo subido</label>",
-                    "      </div>",
-                    "    </div>",
-                    "    <div class=\"admin-actions\">",
-                    "      <button class=\"btn glass primary small\" type=\"submit\">Guardar</button>",
-                    "    </div>",
-                    "  </form>",
-                    "  <div class=\"admin-actions\">",
-                    "    <form class=\"admin-inline-form\" action=\"/admin/videos/move\" method=\"post\">",
-                    f"      <input type=\"hidden\" name=\"id\" value=\"{html.escape(video_id)}\">",
-                    "      <input type=\"hidden\" name=\"direction\" value=\"up\">",
-                    f"      <button class=\"btn glass ghost small\" type=\"submit\"{move_up_disabled}>Subir</button>",
-                    "    </form>",
-                    "    <form class=\"admin-inline-form\" action=\"/admin/videos/move\" method=\"post\">",
-                    f"      <input type=\"hidden\" name=\"id\" value=\"{html.escape(video_id)}\">",
-                    "      <input type=\"hidden\" name=\"direction\" value=\"down\">",
-                    f"      <button class=\"btn glass ghost small\" type=\"submit\"{move_down_disabled}>Bajar</button>",
-                    "    </form>",
-                    "    <form class=\"admin-inline-form\" action=\"/admin/videos/delete\" method=\"post\">",
-                    f"    <input type=\"hidden\" name=\"id\" value=\"{html.escape(video_id)}\">",
-                    "      <button class=\"btn glass ghost small\" type=\"submit\">Eliminar</button>",
-                    "    </form>",
-                    "  </div>",
-                    f"  <span class=\"admin-note\">Tipo actual: {layout}</span>",
+                    "  </details>",
                     "</li>",
                 ]
             )
@@ -2218,8 +2280,16 @@ def render_content_form(content: dict) -> str:
     return "\n".join(
         [
             '<div class="admin-card glass-card admin-wide">',
-            "  <h3>Contenido de la web principal</h3>",
-            "  <form class=\"admin-form\" action=\"/admin/content\" method=\"post\" enctype=\"multipart/form-data\">",
+            '  <details class="admin-collapsible admin-main-collapsible">',
+            '    <summary class="admin-collapsible-summary admin-main-summary">',
+            '      <div class="admin-collapsible-main">',
+            "        <strong>Contenido de la web principal</strong>",
+            "        <span>Hero, bio, programa, contacto y patrocinadores</span>",
+            "      </div>",
+            '      <span class="admin-collapsible-tag">Editar</span>',
+            "    </summary>",
+            '    <div class="admin-collapsible-content">',
+            "      <form class=\"admin-form\" action=\"/admin/content\" method=\"post\" enctype=\"multipart/form-data\">",
             '    <div class="form-section">',
             "      <h4>Hero</h4>",
             '      <div class="form-row">',
@@ -2347,8 +2417,10 @@ def render_content_form(content: dict) -> str:
             f"        <textarea id=\"sponsors\" name=\"sponsors\" rows=\"3\">{html.escape(sponsors_text)}</textarea>",
             "      </div>",
             "    </div>",
-            "    <button class=\"btn glass primary\" type=\"submit\">Guardar contenido</button>",
-            "  </form>",
+            "        <button class=\"btn glass primary\" type=\"submit\">Guardar contenido</button>",
+            "      </form>",
+            "    </div>",
+            "  </details>",
             "</div>",
         ]
     )

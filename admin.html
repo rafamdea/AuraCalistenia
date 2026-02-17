@@ -123,7 +123,7 @@
 
         <div class="admin-card glass-card">
           <h3>Competiciones actuales (editar, ordenar y borrar)</h3>
-          <ul class="admin-list">
+          <ul class="admin-list admin-list-compact">
             {{EVENT_LIST}}
           </ul>
         </div>
@@ -168,7 +168,11 @@
 
         <div class="admin-card glass-card">
           <h3>Vídeos/fotos actuales (editar, ordenar y borrar)</h3>
-          <ul class="admin-list">
+          <div class="form-field">
+            <label for="video_admin_search">Buscar vídeo/foto</label>
+            <input id="video_admin_search" type="text" placeholder="Filtrar por título, etiqueta o texto...">
+          </div>
+          <ul class="admin-list admin-list-compact">
             {{VIDEO_LIST}}
           </ul>
         </div>

@@ -750,6 +750,19 @@ document.addEventListener("DOMContentLoaded", () => {
     studentSearch.addEventListener("input", filterStudents);
   }
 
+  const videoAdminSearch = document.getElementById("video_admin_search");
+  if (videoAdminSearch) {
+    const filterMedia = () => {
+      const query = videoAdminSearch.value.trim().toLowerCase();
+      document.querySelectorAll(".admin-media-item").forEach((item) => {
+        const haystack = (item.dataset.search || "").toLowerCase();
+        item.style.display = !query || haystack.includes(query) ? "" : "none";
+      });
+    };
+    videoAdminSearch.addEventListener("input", filterMedia);
+    filterMedia();
+  }
+
   const portalWeekSelect = document.getElementById("portal_week_select");
   if (portalWeekSelect) {
     const currentWeek = (document.getElementById("portal_week_current") || {}).value || "all";

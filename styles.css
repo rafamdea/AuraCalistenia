@@ -1019,6 +1019,43 @@ h3 {
   gap: 10px;
 }
 
+.portal-scroll-hint {
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.portal-items-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(280px, 360px);
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.portal-items-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.portal-items-row::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+
+.portal-items-row::-webkit-scrollbar-thumb {
+  background: rgba(74, 241, 173, 0.34);
+  border-radius: 999px;
+}
+
+.portal-items-row .portal-item {
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
 .portal-item.done {
   border-color: rgba(88, 217, 120, 0.45);
   background: rgba(88, 217, 120, 0.1);
@@ -1860,17 +1897,31 @@ h3 {
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.06);
   display: grid;
-  gap: 4px;
+  gap: 6px;
+}
+
+.storage-pill-label {
+  font-size: 0.64rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .storage-pill strong {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
 }
 
 .storage-pill span {
   font-size: 0.75rem;
   color: rgba(255, 255, 255, 0.74);
   word-break: break-word;
+}
+
+.storage-pill-debug {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 0.67rem;
+  opacity: 0.8;
 }
 
 .storage-pill.storage-ok {
@@ -1978,6 +2029,15 @@ h3 {
   list-style: none;
   display: grid;
   gap: 12px;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-list-compact {
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
 }
 
 .admin-item {
@@ -2013,8 +2073,109 @@ h3 {
   gap: 12px;
 }
 
-.admin-inline-edit {
+.admin-collapsible-item {
+  padding: 0;
+}
+
+.admin-collapsible {
+  width: 100%;
+}
+
+.admin-collapsible summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.admin-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-collapsible-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(74, 241, 173, 0.14);
+  background: rgba(8, 20, 14, 0.62);
+}
+
+.admin-collapsible-summary::after {
+  content: "▾";
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.65);
+  transition: transform 0.2s ease;
+}
+
+.admin-collapsible[open] > .admin-collapsible-summary::after {
+  transform: rotate(180deg);
+}
+
+.admin-collapsible-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.admin-collapsible-main strong {
+  font-size: 0.93rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-collapsible-main span {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.64);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-item .admin-collapsible-tag {
+  border-radius: 999px;
+  border: 1px solid rgba(74, 241, 173, 0.26);
+  background: rgba(74, 241, 173, 0.1);
+  padding: 4px 10px;
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--green-300);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.admin-collapsible-content {
+  margin-top: 10px;
+  display: grid;
   gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(74, 241, 173, 0.15);
+  background: rgba(6, 16, 11, 0.55);
+}
+
+.admin-main-collapsible .admin-collapsible-summary {
+  padding: 14px 16px;
+}
+
+.admin-main-summary .admin-collapsible-main strong {
+  font-size: 1rem;
+}
+
+.admin-main-collapsible .admin-collapsible-content {
+  margin-top: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.admin-inline-edit {
+  gap: 10px;
 }
 
 .admin-inline-edit .form-row {
@@ -2248,6 +2409,10 @@ h3 {
     padding-right: 20vw;
   }
 
+  .portal-items-row {
+    grid-auto-columns: minmax(300px, 84vw);
+  }
+
   .plan-days-row {
     grid-auto-columns: minmax(240px, 80vw);
   }
@@ -2272,6 +2437,10 @@ h3 {
   .week-donut {
     width: 84px;
     height: 84px;
+  }
+
+  .admin-list-compact {
+    max-height: 440px;
   }
 }
 
@@ -2350,6 +2519,10 @@ h3 {
     padding-right: 16vw;
   }
 
+  .portal-items-row {
+    grid-auto-columns: 88vw;
+  }
+
   .plan-item-row {
     grid-template-columns: 1fr;
   }
@@ -2361,6 +2534,23 @@ h3 {
   .coach-progress-content {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .admin-collapsible-summary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-collapsible-summary::after {
+    align-self: flex-end;
+  }
+
+  .admin-collapsible-tag {
+    align-self: flex-start;
+  }
+
+  .admin-list-compact {
+    max-height: none;
   }
 }
 
