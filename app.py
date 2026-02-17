@@ -13,6 +13,7 @@ import threading
 import time
 import urllib.parse
 from dataclasses import dataclass
+from datetime import datetime
 from email.message import EmailMessage
 from email.parser import BytesParser
 from email.policy import default
@@ -20,6 +21,7 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("AURA_DATA_DIR", str(BASE_DIR / "data")))
@@ -299,6 +301,30 @@ def save_json(path: Path, data) -> None:
             json.dump(data, handle, indent=2, ensure_ascii=True)
 
 
+def parse_bool_env(value: str | None, default_value: bool) -> bool:
+    if value is None:
+        return default_value
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def smtp_defaults_from_env() -> dict:
+    port_raw = os.environ.get("AURA_SMTP_PORT", "").strip()
+    try:
+        port = int(port_raw) if port_raw else 587
+    except ValueError:
+        port = 587
+    return {
+        "enabled": parse_bool_env(os.environ.get("AURA_SMTP_ENABLED"), False),
+        "host": os.environ.get("AURA_SMTP_HOST", "").strip(),
+        "port": port,
+        "username": os.environ.get("AURA_SMTP_USER", "").strip(),
+        "password": os.environ.get("AURA_SMTP_PASS", "").strip(),
+        "from_name": os.environ.get("AURA_SMTP_FROM", "").strip() or "Aura Calistenia",
+        "admin_email": os.environ.get("AURA_SMTP_ADMIN", "").strip(),
+        "use_tls": parse_bool_env(os.environ.get("AURA_SMTP_TLS"), True),
+    }
+
+
 def ensure_data_files() -> None:
     DATA_DIR.mkdir(exist_ok=True)
     UPLOAD_DIR.mkdir(exist_ok=True)
@@ -320,18 +346,10 @@ def ensure_data_files() -> None:
 
     if not SETTINGS_PATH.exists():
         salt, pw_hash = hash_password("admin")
+        smtp_defaults = smtp_defaults_from_env()
         settings = {
             "admin": {"username": "admin", "salt": salt, "hash": pw_hash},
-            "smtp": {
-                "enabled": False,
-                "host": "",
-                "port": 587,
-                "username": "",
-                "password": "",
-                "from_name": "Aura Calistenia",
-                "admin_email": "",
-                "use_tls": True,
-            },
+            "smtp": smtp_defaults,
         }
         save_json(SETTINGS_PATH, settings)
 
@@ -417,6 +435,29 @@ def normalize_content(content: dict | None) -> dict:
 
 def load_content() -> dict:
     return normalize_content(load_json(CONTENT_PATH, DEFAULT_CONTENT))
+
+
+def normalize_smtp_settings(settings: dict | None) -> dict:
+    defaults = smtp_defaults_from_env()
+    if not isinstance(settings, dict):
+        return defaults
+    normalized = defaults.copy()
+    for key in ("enabled", "host", "port", "username", "password", "from_name", "admin_email", "use_tls"):
+        if key in settings:
+            normalized[key] = settings.get(key)
+    if not isinstance(normalized.get("port"), int):
+        try:
+            normalized["port"] = int(normalized.get("port", 587))
+        except (TypeError, ValueError):
+            normalized["port"] = 587
+    normalized["enabled"] = bool(normalized.get("enabled"))
+    normalized["use_tls"] = bool(normalized.get("use_tls"))
+    normalized["host"] = str(normalized.get("host", "")).strip()
+    normalized["username"] = str(normalized.get("username", "")).strip()
+    normalized["password"] = str(normalized.get("password", "")).strip()
+    normalized["from_name"] = str(normalized.get("from_name", "")).strip() or "Aura Calistenia"
+    normalized["admin_email"] = str(normalized.get("admin_email", "")).strip()
+    return normalized
 
 
 def normalize_plan_item(item) -> dict:
@@ -654,17 +695,22 @@ def build_admin_alert(query: dict[str, list[str]]) -> str:
         return '<div class="form-alert error">No se pudo completar la operación.</div>'
     messages = {
         "event_added": "Evento guardado.",
+        "event_updated": "Competición actualizada.",
         "event_deleted": "Evento eliminado.",
+        "event_moved": "Orden de competiciones actualizado.",
         "app_approved": "Usuario aprobado.",
         "app_deleted": "Solicitud eliminada.",
         "video_added": "Vídeo guardado.",
+        "video_updated": "Vídeo actualizado.",
         "video_deleted": "Vídeo eliminado.",
+        "video_moved": "Orden de vídeos actualizado.",
         "plan_saved": "Plan de entrenamiento actualizado.",
         "comment_added": "Comentario enviado.",
         "submission_deleted": "Envío eliminado.",
         "smtp_saved": "Configuración SMTP actualizada.",
         "content_saved": "Contenido web actualizado.",
         "client_added": "Alumno creado.",
+        "client_duplicated": "Alumno duplicado.",
         "client_exists": "Ese usuario ya existe.",
     }
     if status not in messages:
@@ -703,21 +749,26 @@ def find_application(applications: list[dict], username: str) -> dict | None:
 def render_application_list(applications: list[dict]) -> str:
     items = []
     for app in applications:
-        app_id = html.escape(app.get("id", ""))
-        username = html.escape(app.get("username", ""))
-        email = html.escape(app.get("email", ""))
-        skill = html.escape(app.get("skill", ""))
-        level = html.escape(app.get("level", ""))
-        goal = html.escape(app.get("goal", ""))
-        concerns = html.escape(app.get("concerns", ""))
+        raw_id = str(app.get("id", ""))
+        app_id = html.escape(raw_id)
+        raw_username = str(app.get("username", ""))
+        username = html.escape(raw_username)
+        raw_email = str(app.get("email", ""))
+        email = html.escape(raw_email)
+        skill = html.escape(str(app.get("skill", "")))
+        level = html.escape(str(app.get("level", "")))
+        goal = html.escape(str(app.get("goal", "")))
+        concerns = html.escape(str(app.get("concerns", "")))
         approved = bool(app.get("approved"))
         status = "Activo" if approved else "Pendiente"
         actions = []
+        plan_href = f"/admin?plan_user={urllib.parse.quote(raw_username)}#plan"
+        actions.append(f'<a class="btn glass primary small" href="{plan_href}">Ver alumno</a>')
         if not approved:
             actions.append(
                 "\n".join(
                     [
-                        "  <form action=\"/admin/applications/approve\" method=\"post\">",
+                        "  <form class=\"admin-inline-form\" action=\"/admin/applications/approve\" method=\"post\">",
                         f"    <input type=\"hidden\" name=\"id\" value=\"{app_id}\">",
                         "    <button class=\"btn glass primary small\" type=\"submit\">Aprobar</button>",
                         "  </form>",
@@ -727,14 +778,28 @@ def render_application_list(applications: list[dict]) -> str:
         actions.append(
             "\n".join(
                 [
-                    "  <form action=\"/admin/applications/delete\" method=\"post\">",
+                    "  <form class=\"admin-inline-form\" action=\"/admin/clients/duplicate\" method=\"post\">",
+                    f"    <input type=\"hidden\" name=\"id\" value=\"{app_id}\">",
+                    "    <button class=\"btn glass ghost small\" type=\"submit\">Duplicar</button>",
+                    "  </form>",
+                ]
+            )
+        )
+        actions.append(
+            "\n".join(
+                [
+                    "  <form class=\"admin-inline-form\" action=\"/admin/applications/delete\" method=\"post\">",
                     f"    <input type=\"hidden\" name=\"id\" value=\"{app_id}\">",
                     "    <button class=\"btn glass ghost small\" type=\"submit\">Eliminar</button>",
                     "  </form>",
                 ]
             )
         )
-        detail_lines = [f"    <strong>{username}</strong>", f"    <span>{email}</span>"]
+        detail_lines = [
+            f"    <strong>{username}</strong>",
+            f"    <span>ID {app_id}</span>",
+            f"    <span>{email}</span>",
+        ]
         if skill:
             detail_lines.append(f"    <span>Skill: {skill}</span>")
         if goal:
@@ -744,10 +809,11 @@ def render_application_list(applications: list[dict]) -> str:
         if concerns:
             detail_lines.append(f"    <span>Inquietudes: {concerns}</span>")
         detail_lines.append(f"    <span>Estado: {status}</span>")
+        search_blob = " ".join([raw_username, raw_email, str(app.get("skill", "")), raw_id]).lower()
         items.append(
             "\n".join(
                 [
-                    "<li class=\"admin-item\">",
+                    f'<li class="admin-item student-item" data-search="{html.escape(search_blob)}">',
                     "  <div>",
                     "\n".join(detail_lines),
                     "  </div>",
@@ -765,6 +831,60 @@ def format_date(value: int | float | str) -> str:
     except (TypeError, ValueError):
         return ""
     return time.strftime("%d-%m-%Y", time.localtime(timestamp))
+
+
+def render_coach_dashboard(applications: list[dict]) -> str:
+    now = datetime.now()
+    this_month = 0
+    duplicate_rows = 0
+    seen_pairs: set[tuple[str, str]] = set()
+    duplicate_signatures: set[tuple[str, str]] = set()
+    for app in applications:
+        created_at = app.get("created_at", 0)
+        try:
+            created_dt = datetime.fromtimestamp(int(created_at))
+        except (TypeError, ValueError, OSError):
+            created_dt = None
+        if created_dt and created_dt.year == now.year and created_dt.month == now.month:
+            this_month += 1
+        username = str(app.get("username", "")).strip().lower()
+        email = str(app.get("email", "")).strip().lower()
+        signature = (username, email)
+        if signature in seen_pairs:
+            duplicate_signatures.add(signature)
+        seen_pairs.add(signature)
+    for app in applications:
+        signature = (
+            str(app.get("username", "")).strip().lower(),
+            str(app.get("email", "")).strip().lower(),
+        )
+        if signature in duplicate_signatures:
+            duplicate_rows += 1
+
+    total = len(applications)
+    approved = sum(1 for app in applications if app.get("approved"))
+    pending = total - approved
+    return "\n".join(
+        [
+            '<div class="admin-card glass-card admin-wide coach-dashboard">',
+            "  <div class=\"coach-dashboard-head\">",
+            "    <h3>Gestión de alumnos</h3>",
+            '    <a class="btn glass ghost small" href="/admin/export/json">⬇ Descargar todos los JSON en ZIP</a>',
+            "  </div>",
+            "  <div class=\"coach-stats\">",
+            f"    <span>Total de alumnos: <strong>{total}</strong></span>",
+            f"    <span>Activos: <strong>{approved}</strong></span>",
+            f"    <span>Pendientes: <strong>{pending}</strong></span>",
+            f"    <span>Altas este mes: <strong>{this_month}</strong></span>",
+            f"    <span>Posibles duplicados: <strong>{duplicate_rows}</strong></span>",
+            "  </div>",
+            '  <div class="form-field">',
+            '    <label for="student_search">Buscar alumno (usuario, email o ID)</label>',
+            '    <input id="student_search" type="text" placeholder="Escribe para filtrar...">',
+            "  </div>",
+            "</div>",
+        ]
+    )
 
 
 def plan_day_to_text(day: dict) -> str:
@@ -800,17 +920,34 @@ def plan_week_to_texts(week: dict) -> list[str]:
     return texts[:7]
 
 
-def render_training_plan(plan: dict) -> str:
+def render_training_plan(plan: dict, active_week: int | None = None) -> str:
     normalized = normalize_plan(plan)
+    if active_week not in {1, 2, 3, 4}:
+        active_week = None
     parts = [
         '<div class="training-board glass-card" data-stagger>',
         f'  <div class="training-head"><h3>{html.escape(normalized.get("title", "Plan de entrenamiento"))}</h3></div>',
+        '  <div class="training-filter">',
+        '    <label for="portal_week_select">Semana</label>',
+        '    <select id="portal_week_select">',
+        '      <option value="all">Todas</option>',
+        '      <option value="1">Semana 1</option>',
+        '      <option value="2">Semana 2</option>',
+        '      <option value="3">Semana 3</option>',
+        '      <option value="4">Semana 4</option>',
+        "    </select>",
+        "  </div>",
         '  <div class="training-grid">',
     ]
     for week_index, week in enumerate(normalized.get("weeks", []), start=1):
         week_title = html.escape(week.get("title", f"Semana {week_index}"))
         week_summary = html.escape(week.get("summary", ""))
-        parts.append(f'    <div class="training-week stagger-item" id="week{week_index}">')
+        hidden_class = ""
+        if active_week and active_week != week_index:
+            hidden_class = " is-hidden-week"
+        parts.append(
+            f'    <div class="training-week stagger-item{hidden_class}" id="week{week_index}" data-week="{week_index}">'
+        )
         parts.append(f'      <div class="training-week-title">{week_title}</div>')
         parts.append('      <div class="day-grid">')
         days = week.get("days") or []
@@ -895,6 +1032,9 @@ def render_training_plan(plan: dict) -> str:
         parts.append("    </div>")
     parts.append("  </div>")
     parts.append("</div>")
+    parts.append(
+        f'<input type="hidden" id="portal_week_current" value="{active_week if active_week else "all"}">'
+    )
     return "\n".join(parts)
 
 
@@ -1139,42 +1279,161 @@ def render_video_cards(videos: list[dict]) -> str:
 
 def render_event_list(events: list[dict]) -> str:
     items = []
-    for event in events:
-        event_id = event.get("id", "")
-        title = html.escape(event.get("title", ""))
-        meta = html.escape(f"{event.get('date', '')} - {event.get('location', '')}".strip(" -"))
+    total = len(events)
+    for index, event in enumerate(events):
+        event_id = str(event.get("id", ""))
+        title = html.escape(str(event.get("title", "")))
+        date = html.escape(str(event.get("date", "")))
+        location = html.escape(str(event.get("location", "")))
+        description = html.escape(str(event.get("description", "")))
+        tag = html.escape(str(event.get("tag", "")))
+        move_up_disabled = " disabled" if index == 0 else ""
+        move_down_disabled = " disabled" if index == total - 1 else ""
         items.append(
             "\n".join(
                 [
-                    '<li class="admin-item">',
-                    f"  <div><strong>{title}</strong><span>{meta}</span></div>",
-                    "  <form action=\"/admin/events/delete\" method=\"post\">",
+                    '<li class="admin-item admin-edit-item">',
+                    "  <form class=\"admin-form admin-inline-edit\" action=\"/admin/events/update\" method=\"post\">",
                     f"    <input type=\"hidden\" name=\"id\" value=\"{html.escape(event_id)}\">",
-                    "    <button class=\"btn glass ghost small\" type=\"submit\">Eliminar</button>",
+                    "    <div class=\"form-row\">",
+                    "      <div class=\"form-field\">",
+                    "        <label>Título</label>",
+                    f"        <input name=\"title\" type=\"text\" value=\"{title}\" required>",
+                    "      </div>",
+                    "      <div class=\"form-field\">",
+                    "        <label>Etiqueta</label>",
+                    f"        <input name=\"tag\" type=\"text\" value=\"{tag}\" required>",
+                    "      </div>",
+                    "    </div>",
+                    "    <div class=\"form-row\">",
+                    "      <div class=\"form-field\">",
+                    "        <label>Fecha</label>",
+                    f"        <input name=\"date\" type=\"text\" value=\"{date}\" required>",
+                    "      </div>",
+                    "      <div class=\"form-field\">",
+                    "        <label>Lugar</label>",
+                    f"        <input name=\"location\" type=\"text\" value=\"{location}\" required>",
+                    "      </div>",
+                    "    </div>",
+                    "    <div class=\"form-field\">",
+                    "      <label>Descripción</label>",
+                    f"      <input name=\"description\" type=\"text\" value=\"{description}\" required>",
+                    "    </div>",
+                    "    <div class=\"admin-actions\">",
+                    "      <button class=\"btn glass primary small\" type=\"submit\">Guardar</button>",
+                    "    </div>",
                     "  </form>",
+                    "  <div class=\"admin-actions\">",
+                    "    <form class=\"admin-inline-form\" action=\"/admin/events/move\" method=\"post\">",
+                    f"      <input type=\"hidden\" name=\"id\" value=\"{html.escape(event_id)}\">",
+                    "      <input type=\"hidden\" name=\"direction\" value=\"up\">",
+                    f"      <button class=\"btn glass ghost small\" type=\"submit\"{move_up_disabled}>Subir</button>",
+                    "    </form>",
+                    "    <form class=\"admin-inline-form\" action=\"/admin/events/move\" method=\"post\">",
+                    f"      <input type=\"hidden\" name=\"id\" value=\"{html.escape(event_id)}\">",
+                    "      <input type=\"hidden\" name=\"direction\" value=\"down\">",
+                    f"      <button class=\"btn glass ghost small\" type=\"submit\"{move_down_disabled}>Bajar</button>",
+                    "    </form>",
+                    "    <form class=\"admin-inline-form\" action=\"/admin/events/delete\" method=\"post\">",
+                    f"      <input type=\"hidden\" name=\"id\" value=\"{html.escape(event_id)}\">",
+                    "      <button class=\"btn glass ghost small\" type=\"submit\">Eliminar</button>",
+                    "    </form>",
+                    "  </div>",
                     "</li>",
                 ]
             )
         )
-    return "\n".join(items) if items else "<li class=\"admin-item\">Sin eventos.</li>"
+    return "\n".join(items) if items else "<li class=\"admin-item\">Sin competiciones.</li>"
 
 
 def render_video_list(videos: list[dict]) -> str:
     items = []
-    for video in videos:
-        video_id = video.get("id", "")
-        title = html.escape(video.get("title", ""))
-        tag = html.escape(video.get("tag", ""))
-        layout = html.escape(video.get("layout", "") or "normal")
+    total = len(videos)
+    for index, video in enumerate(videos):
+        video_id = str(video.get("id", ""))
+        title = html.escape(str(video.get("title", "")))
+        tag = html.escape(str(video.get("tag", "")))
+        description = html.escape(str(video.get("description", "")))
+        raw_layout = str(video.get("layout", "")).strip()
+        layout = html.escape(raw_layout or "normal")
+        video_url = html.escape(str(video.get("video_url", "")))
+        file_label = html.escape(str(video.get("file", "")) or "-")
+        move_up_disabled = " disabled" if index == 0 else ""
+        move_down_disabled = " disabled" if index == total - 1 else ""
+        layout_options = "".join(
+            [
+                f'<option value=""{" selected" if raw_layout == "" else ""}>Normal</option>',
+                f'<option value="tall"{" selected" if raw_layout == "tall" else ""}>Tall</option>',
+                f'<option value="wide"{" selected" if raw_layout == "wide" else ""}>Wide</option>',
+            ]
+        )
         items.append(
             "\n".join(
                 [
-                    '<li class="admin-item">',
-                    f"  <div><strong>{title}</strong><span>{tag} - {layout}</span></div>",
-                    "  <form action=\"/admin/videos/delete\" method=\"post\">",
+                    '<li class="admin-item admin-edit-item">',
+                    "  <form class=\"admin-form admin-inline-edit\" action=\"/admin/videos/update\" method=\"post\" enctype=\"multipart/form-data\">",
                     f"    <input type=\"hidden\" name=\"id\" value=\"{html.escape(video_id)}\">",
-                    "    <button class=\"btn glass ghost small\" type=\"submit\">Eliminar</button>",
+                    "    <div class=\"form-row\">",
+                    "      <div class=\"form-field\">",
+                    "        <label>Título</label>",
+                    f"        <input name=\"title\" type=\"text\" value=\"{title}\" required>",
+                    "      </div>",
+                    "      <div class=\"form-field\">",
+                    "        <label>Etiqueta</label>",
+                    f"        <input name=\"tag\" type=\"text\" value=\"{tag}\" required>",
+                    "      </div>",
+                    "    </div>",
+                    "    <div class=\"form-row\">",
+                    "      <div class=\"form-field\">",
+                    "        <label>Descripción</label>",
+                    f"        <input name=\"description\" type=\"text\" value=\"{description}\" required>",
+                    "      </div>",
+                    "      <div class=\"form-field\">",
+                    "        <label>Diseño</label>",
+                    f"        <select name=\"layout\">{layout_options}</select>",
+                    "      </div>",
+                    "    </div>",
+                    "    <div class=\"form-row\">",
+                    "      <div class=\"form-field\">",
+                    "        <label>URL externa</label>",
+                    f"        <input name=\"video_url\" type=\"text\" value=\"{video_url}\">",
+                    "      </div>",
+                    "      <div class=\"form-field\">",
+                    "        <label>Archivo actual</label>",
+                    f"        <input type=\"text\" value=\"{file_label}\" readonly>",
+                    "      </div>",
+                    "    </div>",
+                    "    <div class=\"form-row\">",
+                    "      <div class=\"form-field\">",
+                    "        <label>Reemplazar archivo</label>",
+                    "        <input name=\"video_file\" type=\"file\" accept=\"video/mp4,video/webm,video/ogg,image/png,image/jpeg,image/webp\">",
+                    "      </div>",
+                    "      <div class=\"form-field\">",
+                    "        <label>Eliminar archivo actual</label>",
+                    "        <label class=\"checkbox-field\"><input type=\"checkbox\" name=\"remove_file\"> Quitar archivo subido</label>",
+                    "      </div>",
+                    "    </div>",
+                    "    <div class=\"admin-actions\">",
+                    "      <button class=\"btn glass primary small\" type=\"submit\">Guardar</button>",
+                    "    </div>",
                     "  </form>",
+                    "  <div class=\"admin-actions\">",
+                    "    <form class=\"admin-inline-form\" action=\"/admin/videos/move\" method=\"post\">",
+                    f"      <input type=\"hidden\" name=\"id\" value=\"{html.escape(video_id)}\">",
+                    "      <input type=\"hidden\" name=\"direction\" value=\"up\">",
+                    f"      <button class=\"btn glass ghost small\" type=\"submit\"{move_up_disabled}>Subir</button>",
+                    "    </form>",
+                    "    <form class=\"admin-inline-form\" action=\"/admin/videos/move\" method=\"post\">",
+                    f"      <input type=\"hidden\" name=\"id\" value=\"{html.escape(video_id)}\">",
+                    "      <input type=\"hidden\" name=\"direction\" value=\"down\">",
+                    f"      <button class=\"btn glass ghost small\" type=\"submit\"{move_down_disabled}>Bajar</button>",
+                    "    </form>",
+                    "    <form class=\"admin-inline-form\" action=\"/admin/videos/delete\" method=\"post\">",
+                    f"    <input type=\"hidden\" name=\"id\" value=\"{html.escape(video_id)}\">",
+                    "      <button class=\"btn glass ghost small\" type=\"submit\">Eliminar</button>",
+                    "    </form>",
+                    "  </div>",
+                    f"  <span class=\"admin-note\">Tipo actual: {layout}</span>",
                     "</li>",
                 ]
             )
@@ -1375,6 +1634,7 @@ def render_plan_editor(applications: list[dict], selected_user: str) -> str:
                         '    <div class="plan-day-actions">',
                         '      <button type="button" class="plan-day-move" data-action="left" aria-label="Mover día a la izquierda" title="Mover día a la izquierda">←</button>',
                         '      <button type="button" class="plan-day-move" data-action="right" aria-label="Mover día a la derecha" title="Mover día a la derecha">→</button>',
+                        '      <button type="button" class="plan-day-clear" aria-label="Vaciar día" title="Vaciar día">🧹</button>',
                         "    </div>",
                         "  </div>",
                         '  <div class="plan-items">',
@@ -1396,6 +1656,8 @@ def render_plan_editor(applications: list[dict], selected_user: str) -> str:
                     '    <div class="plan-week-actions">',
                     '      <button type="button" class="btn glass ghost small plan-week-move" data-action="up" title="Subir semana">Subir semana</button>',
                     '      <button type="button" class="btn glass ghost small plan-week-move" data-action="down" title="Bajar semana">Bajar semana</button>',
+                    '      <button type="button" class="btn glass ghost small plan-week-action" data-action="duplicate" title="Duplicar semana">Duplicar</button>',
+                    '      <button type="button" class="btn glass ghost small plan-week-action" data-action="clear" title="Vaciar semana">Vaciar</button>',
                     "    </div>",
                     "  </div>",
                     '  <div class="plan-days-row">',
@@ -1488,6 +1750,24 @@ def render_plan_editor(applications: list[dict], selected_user: str) -> str:
             + "</select>",
             '      <button type="button" class="btn glass ghost small" id="copy_day_btn">Copiar</button>',
             "    </div>",
+            "    <div class=\"plan-tool-row\">",
+            "      <label>Mover día:</label>",
+            "      <select id=\"move_day_week_from\">"
+            + "".join([f'<option value="{i}">Semana {i}</option>' for i in range(1, 5)])
+            + "</select>",
+            "      <select id=\"move_day_from\">"
+            + "".join([f'<option value="{i}">Día {i}</option>' for i in range(1, 8)])
+            + "</select>",
+            "      <span>→</span>",
+            "      <select id=\"move_day_week_to\">"
+            + "".join([f'<option value="{i}">Semana {i}</option>' for i in range(1, 5)])
+            + "</select>",
+            "      <select id=\"move_day_to\">"
+            + "".join([f'<option value="{i}">Día {i}</option>' for i in range(1, 8)])
+            + "</select>",
+            '      <button type="button" class="btn glass ghost small" id="move_day_btn">Mover</button>',
+            '      <button type="button" class="btn glass ghost small" id="clear_day_btn">Vaciar destino</button>',
+            "    </div>",
             "  </div>",
             "  <form class=\"admin-form\" action=\"/admin/plan/update\" method=\"post\">",
             f"    <input type=\"hidden\" name=\"username\" value=\"{html.escape(selected_user)}\">",
@@ -1525,7 +1805,7 @@ def render_content_form(content: dict) -> str:
         [
             '<div class="admin-card glass-card admin-wide">',
             "  <h3>Contenido de la web principal</h3>",
-            "  <form class=\"admin-form\" action=\"/admin/content\" method=\"post\">",
+            "  <form class=\"admin-form\" action=\"/admin/content\" method=\"post\" enctype=\"multipart/form-data\">",
             '    <div class="form-section">',
             "      <h4>Hero</h4>",
             '      <div class="form-row">',
@@ -1574,6 +1854,10 @@ def render_content_form(content: dict) -> str:
             "        </div>",
             "      </div>",
             '      <div class="form-field">',
+            "        <label for=\"bio_image_file\">Subir imagen Bio (jpg/png/webp)</label>",
+            "        <input id=\"bio_image_file\" name=\"bio_image_file\" type=\"file\" accept=\"image/png,image/jpeg,image/webp\">",
+            "      </div>",
+            '      <div class="form-field">',
             "        <label for=\"bio_image_caption\">Caption de la imagen</label>",
             f"        <input id=\"bio_image_caption\" name=\"bio_image_caption\" type=\"text\" value=\"{html.escape(bio.get('image_caption',''))}\">",
             "      </div>",
@@ -1589,6 +1873,10 @@ def render_content_form(content: dict) -> str:
             "          <label for=\"program_image\">Imagen (ruta o URL)</label>",
             f"          <input id=\"program_image\" name=\"program_image\" type=\"text\" value=\"{html.escape(program.get('image',''))}\">",
             "        </div>",
+            "      </div>",
+            '      <div class="form-field">',
+            "        <label for=\"program_image_file\">Subir imagen Programa (jpg/png/webp)</label>",
+            "        <input id=\"program_image_file\" name=\"program_image_file\" type=\"file\" accept=\"image/png,image/jpeg,image/webp\">",
             "      </div>",
             '      <div class="form-field">',
             "        <label for=\"program_lead\">Lead</label>",
@@ -1658,10 +1946,12 @@ def render_admin_page(query: dict[str, list[str]]) -> str:
     applications = load_applications()
     content = load_content()
     settings = load_json(SETTINGS_PATH, {})
-    smtp = settings.get("smtp", {})
+    smtp = normalize_smtp_settings(settings.get("smtp", {}))
+    settings["smtp"] = smtp
     selected_user = (query.get("plan_user") or [""])[0]
     replacements = {
         "ADMIN_MESSAGE": build_admin_alert(query),
+        "COACH_DASHBOARD": render_coach_dashboard(applications),
         "PLAN_EDITOR": render_plan_editor(applications, selected_user),
         "CONTENT_FORM": render_content_form(content),
         "EVENT_LIST": render_event_list(events),
@@ -1670,7 +1960,7 @@ def render_admin_page(query: dict[str, list[str]]) -> str:
         "SMTP_HOST": html.escape(str(smtp.get("host", ""))),
         "SMTP_PORT": html.escape(str(smtp.get("port", ""))),
         "SMTP_USER": html.escape(str(smtp.get("username", ""))),
-        "SMTP_PASS": html.escape(str(smtp.get("password", ""))),
+        "SMTP_PASS": "",
         "SMTP_FROM": html.escape(str(smtp.get("from_name", ""))),
         "SMTP_ADMIN": html.escape(str(smtp.get("admin_email", ""))),
         "SMTP_ENABLED": "checked" if smtp.get("enabled") else "",
@@ -1765,7 +2055,12 @@ def render_portal_page(query: dict[str, list[str]], cookie_header: str | None) -
         return render_template(PORTAL_TEMPLATE, {"PORTAL_CONTENT": login_card})
 
     app = find_application(applications, portal_user) or {}
-    plan_html = render_training_plan(app.get("plan", {}))
+    week_param = (query.get("week") or [""])[0]
+    try:
+        active_week = int(week_param)
+    except (TypeError, ValueError):
+        active_week = None
+    plan_html = render_training_plan(app.get("plan", {}), active_week=active_week)
     skill = html.escape(app.get("skill", "Sin datos"))
     level = html.escape(app.get("level", ""))
     goal = html.escape(app.get("goal", ""))
@@ -1895,7 +2190,14 @@ def parse_plan_items_from_form(data: dict[str, str], week_index: int, day_index:
     return items
 
 
-def send_email(smtp_settings: dict, to_email: str, subject: str, body: str) -> None:
+def send_email(
+    smtp_settings: dict,
+    to_email: str,
+    subject: str,
+    body: str,
+    html_body: str | None = None,
+    reply_to: str | None = None,
+) -> None:
     msg = EmailMessage()
     from_name = smtp_settings.get("from_name") or "Aura Calistenia"
     from_email = smtp_settings.get("username") or smtp_settings.get("admin_email") or ""
@@ -1903,6 +2205,10 @@ def send_email(smtp_settings: dict, to_email: str, subject: str, body: str) -> N
     msg["To"] = to_email
     msg["Subject"] = subject
     msg.set_content(body)
+    if html_body:
+        msg.add_alternative(html_body, subtype="html")
+    if reply_to:
+        msg["Reply-To"] = reply_to
 
     host = smtp_settings.get("host")
     port = int(smtp_settings.get("port", 587))
@@ -1929,26 +2235,82 @@ def notify_application(application: dict, smtp_settings: dict) -> tuple[bool, st
     if not admin_email:
         return False, "smtp_incomplete"
 
-    admin_subject = "Nueva solicitud de entreno"
+    username = str(application.get("username", "")).strip()
+    email_value = str(application.get("email", "")).strip()
+    skill = str(application.get("skill", "")).strip()
+    level = str(application.get("level", "")).strip()
+    goal = str(application.get("goal", "")).strip()
+    concerns = str(application.get("concerns", "")).strip()
+    created_text = format_date(application.get("created_at", 0)) or "Sin fecha"
+
+    admin_subject = f"solicitud de alta - {username}"
     admin_body = (
-        "Nueva solicitud registrada:\n"
-        f"Usuario: {application.get('username')}\n"
-        f"Email: {application.get('email')}\n"
-        f"Skill: {application.get('skill')}\n"
-        f"Objetivo: {application.get('goal', '')}\n"
+        "Nueva solicitud de alta registrada\n\n"
+        f"Fecha: {created_text}\n"
+        f"Nombre de usuario: {username}\n"
+        f"Correo: {email_value}\n"
+        f"Skill objetivo: {skill or 'No indicado'}\n"
+        f"Nivel actual: {level or 'No indicado'}\n"
+        f"Objetivo principal: {goal or 'No indicado'}\n"
+        f"Inquietudes: {concerns or 'No indicó inquietudes'}\n\n"
+        "Puedes responder directamente a este mensaje para contestar al alumno."
+    )
+    admin_html = "\n".join(
+        [
+            "<html><body style=\"font-family:Arial,sans-serif;background:#f5f7fb;color:#1e2330;\">",
+            "<div style=\"max-width:680px;margin:24px auto;background:#ffffff;border:1px solid #e4e8f0;border-radius:14px;padding:24px;\">",
+            "<h2 style=\"margin:0 0 14px 0;color:#b08b4a;\">Nueva solicitud de alta</h2>",
+            "<p style=\"margin:0 0 16px 0;color:#5f677a;\">Se ha recibido una nueva solicitud desde la web.</p>",
+            "<table style=\"width:100%;border-collapse:collapse;\">",
+            f"<tr><td style=\"padding:10px;border-bottom:1px solid #edf1f7;\"><strong>Fecha</strong></td><td style=\"padding:10px;border-bottom:1px solid #edf1f7;\">{html.escape(created_text)}</td></tr>",
+            f"<tr><td style=\"padding:10px;border-bottom:1px solid #edf1f7;\"><strong>Usuario</strong></td><td style=\"padding:10px;border-bottom:1px solid #edf1f7;\">{html.escape(username)}</td></tr>",
+            f"<tr><td style=\"padding:10px;border-bottom:1px solid #edf1f7;\"><strong>Email</strong></td><td style=\"padding:10px;border-bottom:1px solid #edf1f7;\">{html.escape(email_value)}</td></tr>",
+            f"<tr><td style=\"padding:10px;border-bottom:1px solid #edf1f7;\"><strong>Skill</strong></td><td style=\"padding:10px;border-bottom:1px solid #edf1f7;\">{html.escape(skill or 'No indicado')}</td></tr>",
+            f"<tr><td style=\"padding:10px;border-bottom:1px solid #edf1f7;\"><strong>Nivel actual</strong></td><td style=\"padding:10px;border-bottom:1px solid #edf1f7;\">{html.escape(level or 'No indicado')}</td></tr>",
+            f"<tr><td style=\"padding:10px;border-bottom:1px solid #edf1f7;\"><strong>Objetivo</strong></td><td style=\"padding:10px;border-bottom:1px solid #edf1f7;\">{html.escape(goal or 'No indicado')}</td></tr>",
+            f"<tr><td style=\"padding:10px;vertical-align:top;\"><strong>Inquietudes</strong></td><td style=\"padding:10px;\">{html.escape(concerns or 'No indicó inquietudes')}</td></tr>",
+            "</table>",
+            "<p style=\"margin:16px 0 0 0;color:#5f677a;\">Puedes responder directamente a este correo para contestar al alumno.</p>",
+            "</div></body></html>",
+        ]
     )
 
     user_subject = "Solicitud recibida - Aura Calistenia"
     user_body = (
-        "Tu solicitud fue recibida.\n\n"
-        f"Skill: {application.get('skill')}\n"
-        f"Objetivo: {application.get('goal', '')}\n"
-        "Te contactaremos para confirmar tu acceso."
+        "Hemos recibido tu solicitud correctamente.\n\n"
+        f"Usuario: {username}\n"
+        f"Skill objetivo: {skill or 'No indicado'}\n"
+        f"Objetivo: {goal or 'No indicado'}\n\n"
+        "En breve revisaremos tus datos y te responderemos por email."
+    )
+    user_html = "\n".join(
+        [
+            "<html><body style=\"font-family:Arial,sans-serif;background:#f5f7fb;color:#1e2330;\">",
+            "<div style=\"max-width:640px;margin:24px auto;background:#ffffff;border:1px solid #e4e8f0;border-radius:14px;padding:24px;\">",
+            "<h2 style=\"margin:0 0 12px 0;color:#b08b4a;\">Solicitud recibida</h2>",
+            f"<p style=\"margin:0 0 8px 0;\">Hola <strong>{html.escape(username)}</strong>,</p>",
+            "<p style=\"margin:0 0 14px 0;color:#5f677a;\">Hemos recibido tu solicitud en Aura Calistenia con estos datos:</p>",
+            "<ul style=\"margin:0 0 14px 18px;padding:0;color:#2f3748;\">",
+            f"<li>Skill objetivo: {html.escape(skill or 'No indicado')}</li>",
+            f"<li>Nivel actual: {html.escape(level or 'No indicado')}</li>",
+            f"<li>Objetivo: {html.escape(goal or 'No indicado')}</li>",
+            "</ul>",
+            "<p style=\"margin:0;color:#5f677a;\">Te responderemos a este correo cuando revisemos tu alta.</p>",
+            "</div></body></html>",
+        ]
     )
 
     try:
-        send_email(smtp_settings, admin_email, admin_subject, admin_body)
-        send_email(smtp_settings, application.get("email", ""), user_subject, user_body)
+        send_email(
+            smtp_settings,
+            admin_email,
+            admin_subject,
+            admin_body,
+            html_body=admin_html,
+            reply_to=email_value,
+        )
+        if email_value:
+            send_email(smtp_settings, email_value, user_subject, user_body, html_body=user_html)
     except Exception:
         return False, "smtp_failed"
 
@@ -1975,6 +2337,23 @@ def handle_file_upload(field: UploadedFile) -> tuple[str, str] | None:
     return safe_name, ext
 
 
+def move_item_by_id(items: list[dict], item_id: str, direction: str) -> tuple[list[dict], bool]:
+    index = -1
+    for idx, item in enumerate(items):
+        if str(item.get("id", "")).strip() == item_id:
+            index = idx
+            break
+    if index == -1:
+        return items, False
+    step = -1 if direction == "up" else 1
+    target = index + step
+    if target < 0 or target >= len(items):
+        return items, False
+    reordered = list(items)
+    reordered[index], reordered[target] = reordered[target], reordered[index]
+    return reordered, True
+
+
 class AuraHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(BASE_DIR), **kwargs)
@@ -1987,6 +2366,15 @@ class AuraHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
+    def send_bytes(self, payload: bytes, content_type: str, filename: str | None = None) -> None:
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(payload)))
+        if filename:
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.end_headers()
+        self.wfile.write(payload)
+
     def redirect(self, location: str) -> None:
         self.send_response(HTTPStatus.SEE_OTHER)
         self.send_header("Location", location)
@@ -1998,6 +2386,26 @@ class AuraHandler(SimpleHTTPRequestHandler):
             self.redirect(f"/admin?status={status}")
         else:
             self.redirect(f"/?admin_status={status}#acceso")
+
+    def handle_export_json(self) -> None:
+        timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+        memory = BytesIO()
+        files = [
+            ("applications.json", APPLICATIONS_PATH),
+            ("events.json", EVENTS_PATH),
+            ("videos.json", VIDEOS_PATH),
+            ("submissions.json", SUBMISSIONS_PATH),
+            ("content.json", CONTENT_PATH),
+            ("settings.json", SETTINGS_PATH),
+        ]
+        with ZipFile(memory, mode="w", compression=ZIP_DEFLATED) as bundle:
+            for archive_name, source in files:
+                if source.exists():
+                    bundle.writestr(archive_name, source.read_text(encoding="utf-8"))
+                else:
+                    bundle.writestr(archive_name, "[]")
+        payload = memory.getvalue()
+        self.send_bytes(payload, "application/zip", f"aura-backup-{timestamp}.zip")
 
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
@@ -2024,6 +2432,14 @@ class AuraHandler(SimpleHTTPRequestHandler):
 
         if path == "/portal" or path == "/portal/":
             self.send_html(render_portal_page(query, self.headers.get("Cookie")))
+            return
+
+        if path == "/admin/export/json":
+            user = get_session_user(self.headers.get("Cookie"), ADMIN_SESSION_COOKIE, "admin")
+            if not user:
+                self.send_error(HTTPStatus.FORBIDDEN)
+                return
+            self.handle_export_json()
             return
 
         if path.startswith("/data/"):
@@ -2077,12 +2493,28 @@ class AuraHandler(SimpleHTTPRequestHandler):
             self.handle_event_add()
             return
 
+        if path == "/admin/events/update":
+            self.handle_event_update()
+            return
+
+        if path == "/admin/events/move":
+            self.handle_event_move()
+            return
+
         if path == "/admin/events/delete":
             self.handle_event_delete()
             return
 
         if path == "/admin/videos/add":
             self.handle_video_add()
+            return
+
+        if path == "/admin/videos/update":
+            self.handle_video_update()
+            return
+
+        if path == "/admin/videos/move":
+            self.handle_video_move()
             return
 
         if path == "/admin/videos/delete":
@@ -2103,6 +2535,10 @@ class AuraHandler(SimpleHTTPRequestHandler):
 
         if path == "/admin/clients/add":
             self.handle_client_add()
+            return
+
+        if path == "/admin/clients/duplicate":
+            self.handle_client_duplicate()
             return
 
         if path == "/admin/applications/approve":
@@ -2165,7 +2601,7 @@ class AuraHandler(SimpleHTTPRequestHandler):
         save_json(APPLICATIONS_PATH, applications)
 
         settings = load_json(SETTINGS_PATH, {})
-        smtp_settings = settings.get("smtp", {})
+        smtp_settings = normalize_smtp_settings(settings.get("smtp", {}))
         ok, reason = notify_application(application, smtp_settings)
         if ok:
             self.redirect("/?status=ok")
@@ -2304,6 +2740,50 @@ class AuraHandler(SimpleHTTPRequestHandler):
         save_json(EVENTS_PATH, events)
         self.admin_redirect("event_added")
 
+    def handle_event_update(self) -> None:
+        data, _ = parse_post_data(self)
+        event_id = data.get("id", "").strip()
+        title = data.get("title", "").strip()
+        date = data.get("date", "").strip()
+        location = data.get("location", "").strip()
+        description = data.get("description", "").strip()
+        tag = data.get("tag", "").strip()
+        if not all([event_id, title, date, location, description, tag]):
+            self.admin_redirect("error")
+            return
+        events = load_json(EVENTS_PATH, [])
+        updated = False
+        for event in events:
+            if str(event.get("id", "")).strip() != event_id:
+                continue
+            event["title"] = title
+            event["date"] = date
+            event["location"] = location
+            event["description"] = description
+            event["tag"] = tag
+            updated = True
+            break
+        if not updated:
+            self.admin_redirect("error")
+            return
+        save_json(EVENTS_PATH, events)
+        self.admin_redirect("event_updated")
+
+    def handle_event_move(self) -> None:
+        data, _ = parse_post_data(self)
+        event_id = data.get("id", "").strip()
+        direction = data.get("direction", "").strip()
+        if direction not in {"up", "down"} or not event_id:
+            self.admin_redirect("error")
+            return
+        events = load_json(EVENTS_PATH, [])
+        reordered, changed = move_item_by_id(events, event_id, direction)
+        if not changed:
+            self.admin_redirect("error")
+            return
+        save_json(EVENTS_PATH, reordered)
+        self.admin_redirect("event_moved")
+
     def handle_event_delete(self) -> None:
         data, _ = parse_post_data(self)
         event_id = data.get("id", "").strip()
@@ -2344,6 +2824,68 @@ class AuraHandler(SimpleHTTPRequestHandler):
         save_json(VIDEOS_PATH, videos)
         self.admin_redirect("video_added")
 
+    def handle_video_update(self) -> None:
+        data, files = parse_post_data(self)
+        video_id = data.get("id", "").strip()
+        title = data.get("title", "").strip()
+        tag = data.get("tag", "").strip()
+        description = data.get("description", "").strip()
+        layout = data.get("layout", "").strip()
+        video_url = data.get("video_url", "").strip()
+        remove_file = "remove_file" in data
+        if not all([video_id, title, tag, description]):
+            self.admin_redirect("error")
+            return
+
+        videos = load_json(VIDEOS_PATH, [])
+        updated = False
+        for video in videos:
+            if str(video.get("id", "")).strip() != video_id:
+                continue
+            video["title"] = title
+            video["tag"] = tag
+            video["description"] = description
+            video["layout"] = layout if layout in {"tall", "wide"} else ""
+            video["video_url"] = video_url
+            current_file = str(video.get("file", "")).strip()
+            if remove_file and current_file:
+                current_path = UPLOAD_DIR / current_file
+                if current_path.exists():
+                    current_path.unlink(missing_ok=True)
+                video["file"] = ""
+                current_file = ""
+            if "video_file" in files:
+                upload = handle_file_upload(files["video_file"])
+                if upload:
+                    new_file, _ = upload
+                    if current_file:
+                        old_path = UPLOAD_DIR / current_file
+                        if old_path.exists():
+                            old_path.unlink(missing_ok=True)
+                    video["file"] = new_file
+            updated = True
+            break
+        if not updated:
+            self.admin_redirect("error")
+            return
+        save_json(VIDEOS_PATH, videos)
+        self.admin_redirect("video_updated")
+
+    def handle_video_move(self) -> None:
+        data, _ = parse_post_data(self)
+        video_id = data.get("id", "").strip()
+        direction = data.get("direction", "").strip()
+        if direction not in {"up", "down"} or not video_id:
+            self.admin_redirect("error")
+            return
+        videos = load_json(VIDEOS_PATH, [])
+        reordered, changed = move_item_by_id(videos, video_id, direction)
+        if not changed:
+            self.admin_redirect("error")
+            return
+        save_json(VIDEOS_PATH, reordered)
+        self.admin_redirect("video_moved")
+
     def handle_video_delete(self) -> None:
         data, _ = parse_post_data(self)
         video_id = data.get("id", "").strip()
@@ -2364,17 +2906,19 @@ class AuraHandler(SimpleHTTPRequestHandler):
     def handle_settings_update(self) -> None:
         data, _ = parse_post_data(self)
         settings = load_json(SETTINGS_PATH, {})
-        smtp = settings.get("smtp", {})
+        smtp = normalize_smtp_settings(settings.get("smtp", {}))
         try:
             port = int(data.get("smtp_port", 587) or 587)
         except ValueError:
             port = 587
+        password_value = data.get("smtp_pass", "").strip()
+        if password_value:
+            smtp["password"] = password_value
         smtp.update(
             {
                 "host": data.get("smtp_host", "").strip(),
                 "port": port,
                 "username": data.get("smtp_user", "").strip(),
-                "password": data.get("smtp_pass", "").strip(),
                 "from_name": data.get("smtp_from", "").strip() or "Aura Calistenia",
                 "admin_email": data.get("smtp_admin", "").strip(),
                 "enabled": "smtp_enabled" in data,
@@ -2386,7 +2930,7 @@ class AuraHandler(SimpleHTTPRequestHandler):
         self.admin_redirect("smtp_saved")
 
     def handle_content_update(self) -> None:
-        data, _ = parse_post_data(self)
+        data, files = parse_post_data(self)
         content = load_content()
 
         content["hero"]["eyebrow"] = data.get("hero_eyebrow", "").strip()
@@ -2404,6 +2948,12 @@ class AuraHandler(SimpleHTTPRequestHandler):
         content["bio"]["signature"] = data.get("bio_signature", "").strip()
         content["bio"]["image"] = data.get("bio_image", "").strip()
         content["bio"]["image_caption"] = data.get("bio_image_caption", "").strip()
+        if "bio_image_file" in files:
+            upload = handle_file_upload(files["bio_image_file"])
+            if upload:
+                stored_file, ext = upload
+                if ext in ALLOWED_IMAGE_EXT:
+                    content["bio"]["image"] = f"/uploads/{stored_file}"
 
         content["program"]["title"] = data.get("program_title", "").strip()
         content["program"]["lead"] = data.get("program_lead", "").strip()
@@ -2414,6 +2964,12 @@ class AuraHandler(SimpleHTTPRequestHandler):
             content["program"]["bullets"] = bullets
         content["program"]["image"] = data.get("program_image", "").strip()
         content["program"]["image_caption"] = data.get("program_image_caption", "").strip()
+        if "program_image_file" in files:
+            upload = handle_file_upload(files["program_image_file"])
+            if upload:
+                stored_file, ext = upload
+                if ext in ALLOWED_IMAGE_EXT:
+                    content["program"]["image"] = f"/uploads/{stored_file}"
 
         content["contact"]["email"] = data.get("contact_email", "").strip()
         content["contact"]["phone"] = data.get("contact_phone", "").strip()
@@ -2465,6 +3021,67 @@ class AuraHandler(SimpleHTTPRequestHandler):
         applications.append(application)
         save_json(APPLICATIONS_PATH, applications)
         self.admin_redirect("client_added")
+
+    def handle_client_duplicate(self) -> None:
+        data, _ = parse_post_data(self)
+        source_id = data.get("id", "").strip()
+        if not source_id:
+            self.admin_redirect("error")
+            return
+        applications = load_applications()
+        source = None
+        for app in applications:
+            if str(app.get("id", "")).strip() == source_id:
+                source = app
+                break
+        if not source:
+            self.admin_redirect("error")
+            return
+        base_username = str(source.get("username", "")).strip()
+        if not base_username:
+            self.admin_redirect("error")
+            return
+        existing_usernames = {str(app.get("username", "")).strip().lower() for app in applications}
+        duplicate_username = f"{base_username}_copy"
+        suffix = 2
+        while duplicate_username.lower() in existing_usernames:
+            duplicate_username = f"{base_username}_copy{suffix}"
+            suffix += 1
+        existing_emails = {str(app.get("email", "")).strip().lower() for app in applications}
+        duplicate_email = str(source.get("email", "")).strip()
+        if duplicate_email:
+            if "@" in duplicate_email:
+                local, domain = duplicate_email.split("@", 1)
+                counter = 1
+                candidate = f"{local}+copy@{domain}"
+                while candidate.lower() in existing_emails:
+                    counter += 1
+                    candidate = f"{local}+copy{counter}@{domain}"
+                duplicate_email = candidate
+            else:
+                counter = 1
+                candidate = f"{duplicate_email}.copy"
+                while candidate.lower() in existing_emails:
+                    counter += 1
+                    candidate = f"{duplicate_email}.copy{counter}"
+                duplicate_email = candidate
+        duplicated = {
+            "id": f"app_{secrets.token_hex(4)}",
+            "username": duplicate_username,
+            "email": duplicate_email,
+            "skill": source.get("skill", ""),
+            "level": source.get("level", ""),
+            "goal": source.get("goal", ""),
+            "concerns": source.get("concerns", ""),
+            "salt": source.get("salt", ""),
+            "hash": source.get("hash", ""),
+            "approved": bool(source.get("approved")),
+            "plan": normalize_plan(source.get("plan")),
+            "created_at": int(time.time()),
+        }
+        applications.append(duplicated)
+        save_json(APPLICATIONS_PATH, applications)
+        self.admin_redirect("client_duplicated")
 
     def handle_plan_update(self) -> None:
         data, _ = parse_post_data(self)

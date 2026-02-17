@@ -270,6 +270,17 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     };
 
+    const emptyDayData = (dayNumber) => ({
+      title: `Día ${dayNumber}`,
+      rest: false,
+      items: [],
+    });
+
+    const emptyWeekData = (weekNumber) => ({
+      title: `Semana ${weekNumber}`,
+      days: Array.from({ length: 7 }, (_, idx) => emptyDayData(idx + 1)),
+    });
+
     const setCurrentUser = (username) => {
       const currentLabel = planEditor.querySelector(".plan-current-user strong");
       if (currentLabel) {
@@ -366,6 +377,16 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      const clearDayButton = event.target.closest(".plan-day-clear");
+      if (clearDayButton) {
+        event.preventDefault();
+        const dayCard = clearDayButton.closest(".plan-day-card");
+        if (!dayCard) return;
+        const dayNumber = Number(dayCard.dataset.day || 1);
+        applyDayData(dayCard, emptyDayData(dayNumber));
+        return;
+      }
+
       const moveWeekButton = event.target.closest(".plan-week-move");
       if (moveWeekButton) {
         event.preventDefault();
@@ -382,6 +403,28 @@ document.addEventListener("DOMContentLoaded", () => {
         const targetData = extractWeekData(targetBlock);
         applyWeekData(weekBlock, targetData);
         applyWeekData(targetBlock, currentData);
+        return;
+      }
+
+      const weekActionButton = event.target.closest(".plan-week-action");
+      if (weekActionButton) {
+        event.preventDefault();
+        const weekBlock = weekActionButton.closest(".plan-week-block");
+        if (!weekBlock) return;
+        const weekNumber = Number(weekBlock.dataset.week || 1);
+        const action = weekActionButton.dataset.action;
+        if (action === "clear") {
+          applyWeekData(weekBlock, emptyWeekData(weekNumber));
+        } else if (action === "duplicate") {
+          const cloneData = extractWeekData(weekBlock);
+          const targetIndex = weekNumber < 4 ? weekNumber + 1 : weekNumber - 1;
+          const targetBlock = planEditor.querySelector(
+            `.plan-week-block[data-week="${targetIndex}"]`
+          );
+          if (targetBlock) {
+            applyWeekData(targetBlock, cloneData);
+          }
+        }
         return;
       }
     });
@@ -487,6 +530,110 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     }
+
+    const moveDayButton = document.getElementById("move_day_btn");
+    if (moveDayButton) {
+      moveDayButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        const sourceWeek = Number(
+          (document.getElementById("move_day_week_from") || {}).value || 0
+        );
+        const sourceDay = Number((document.getElementById("move_day_from") || {}).value || 0);
+        const targetWeek = Number(
+          (document.getElementById("move_day_week_to") || {}).value || 0
+        );
+        const targetDay = Number((document.getElementById("move_day_to") || {}).value || 0);
+        if (!sourceWeek || !sourceDay || !targetWeek || !targetDay) {
+          return;
+        }
+        if (sourceWeek === targetWeek && sourceDay === targetDay) {
+          return;
+        }
+        const sourceWeekBlock = planEditor.querySelector(
+          `.plan-week-block[data-week="${sourceWeek}"]`
+        );
+        const targetWeekBlock = planEditor.querySelector(
+          `.plan-week-block[data-week="${targetWeek}"]`
+        );
+        if (!sourceWeekBlock || !targetWeekBlock) {
+          return;
+        }
+        const sourceCard = sourceWeekBlock.querySelector(
+          `.plan-day-card[data-day="${sourceDay}"]`
+        );
+        const targetCard = targetWeekBlock.querySelector(
+          `.plan-day-card[data-day="${targetDay}"]`
+        );
+        if (!sourceCard || !targetCard) {
+          return;
+        }
+        const sourceData = extractDayData(sourceCard);
+        applyDayData(targetCard, sourceData);
+        applyDayData(sourceCard, emptyDayData(sourceDay));
+      });
+    }
+
+    const clearDestinationButton = document.getElementById("clear_day_btn");
+    if (clearDestinationButton) {
+      clearDestinationButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        const targetWeek = Number(
+          (document.getElementById("move_day_week_to") || {}).value || 0
+        );
+        const targetDay = Number((document.getElementById("move_day_to") || {}).value || 0);
+        if (!targetWeek || !targetDay) {
+          return;
+        }
+        const targetWeekBlock = planEditor.querySelector(
+          `.plan-week-block[data-week="${targetWeek}"]`
+        );
+        if (!targetWeekBlock) {
+          return;
+        }
+        const targetCard = targetWeekBlock.querySelector(
+          `.plan-day-card[data-day="${targetDay}"]`
+        );
+        if (targetCard) {
+          applyDayData(targetCard, emptyDayData(targetDay));
+        }
+      });
+    }
+  }
+
+  const studentSearch = document.getElementById("student_search");
+  if (studentSearch) {
+    const filterStudents = () => {
+      const query = studentSearch.value.trim().toLowerCase();
+      document.querySelectorAll(".student-item").forEach((item) => {
+        const haystack = (item.dataset.search || "").toLowerCase();
+        item.style.display = !query || haystack.includes(query) ? "" : "none";
+      });
+    };
+    studentSearch.addEventListener("input", filterStudents);
+  }
+
+  const portalWeekSelect = document.getElementById("portal_week_select");
+  if (portalWeekSelect) {
+    const currentWeek = (document.getElementById("portal_week_current") || {}).value || "all";
+    portalWeekSelect.value = currentWeek;
+    const applyWeekFilter = (weekValue) => {
+      document.querySelectorAll(".training-week").forEach((weekCard) => {
+        const cardWeek = weekCard.dataset.week || "";
+        weekCard.style.display = weekValue === "all" || cardWeek === weekValue ? "" : "none";
+      });
+    };
+    applyWeekFilter(portalWeekSelect.value || "all");
+    portalWeekSelect.addEventListener("change", () => {
+      const selected = portalWeekSelect.value || "all";
+      applyWeekFilter(selected);
+      const url = new URL(window.location.href);
+      if (selected === "all") {
+        url.searchParams.delete("week");
+      } else {
+        url.searchParams.set("week", selected);
+      }
+      window.history.replaceState({}, "", url.toString());
+    });
   }
 
   const staggerGroups = document.querySelectorAll("[data-stagger]");

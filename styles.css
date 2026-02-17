@@ -847,6 +847,29 @@ h3 {
   margin-bottom: 8px;
 }
 
+.training-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.training-filter label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.training-filter select {
+  border-radius: 999px;
+  border: 1px solid rgba(74, 241, 173, 0.22);
+  background: rgba(6, 15, 11, 0.72);
+  color: var(--white);
+  padding: 8px 12px;
+  font-family: inherit;
+}
+
 .training-grid {
   display: grid;
   gap: 20px;
@@ -858,6 +881,10 @@ h3 {
   border: 1px solid rgba(74, 241, 173, 0.2);
   background: linear-gradient(160deg, rgba(8, 30, 22, 0.9), rgba(4, 8, 6, 0.9));
   box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
+}
+
+.training-week.is-hidden-week {
+  display: none;
 }
 
 .training-week-title {
@@ -1440,6 +1467,7 @@ h3 {
 .plan-day-actions {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .plan-day-move {
@@ -1450,6 +1478,17 @@ h3 {
   background: rgba(255, 255, 255, 0.06);
   color: var(--white);
   cursor: pointer;
+}
+
+.plan-day-clear {
+  min-width: 34px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(74, 241, 173, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--white);
+  cursor: pointer;
+  font-size: 0.72rem;
 }
 
 .plan-items {
@@ -1540,6 +1579,53 @@ h3 {
   background: #050706;
 }
 
+.coach-dashboard {
+  gap: 16px;
+}
+
+.coach-dashboard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.coach-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.coach-stats span {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(74, 241, 173, 0.18);
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: rgba(8, 18, 13, 0.72);
+}
+
+.coach-stats strong {
+  color: var(--green-300);
+}
+
+.coach-dashboard input[type="text"] {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(74, 241, 173, 0.22);
+  padding: 10px 12px;
+  background: rgba(6, 15, 11, 0.7);
+  color: var(--white);
+  font-size: 0.92rem;
+}
+
+.coach-dashboard input[type="text"]:focus {
+  outline: none;
+  border-color: rgba(74, 241, 173, 0.6);
+  box-shadow: 0 0 0 3px rgba(74, 241, 173, 0.15);
+}
+
 .admin-list {
   list-style: none;
   display: grid;
@@ -1548,7 +1634,7 @@ h3 {
 
 .admin-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
@@ -1569,9 +1655,37 @@ h3 {
   gap: 10px;
 }
 
+.admin-inline-form {
+  display: inline-flex;
+}
+
+.admin-edit-item {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.admin-inline-edit {
+  gap: 12px;
+}
+
+.admin-inline-edit .form-row {
+  gap: 10px;
+}
+
+.admin-inline-edit .form-field label {
+  font-size: 0.65rem;
+  letter-spacing: 0.13em;
+}
+
 .admin-note {
   font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.6);
+}
+
+.admin-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .admin-login {

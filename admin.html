@@ -34,6 +34,7 @@
       </div>
 
       <div class="container admin-stack">
+        {{COACH_DASHBOARD}}
         {{PLAN_EDITOR}}
         {{CONTENT_FORM}}
       </div>
@@ -92,7 +93,7 @@
         </div>
 
         <div class="admin-card glass-card">
-          <h3>Agregar evento</h3>
+          <h3>Agregar competición</h3>
           <form class="admin-form" action="/admin/events/add" method="post">
             <div class="form-field">
               <label for="event_title">Título</label>
@@ -116,19 +117,19 @@
               <label for="event_tag">Etiqueta</label>
               <input id="event_tag" name="tag" type="text" placeholder="Nacional o Europa" required>
             </div>
-            <button class="btn glass primary" type="submit">Guardar evento</button>
+            <button class="btn glass primary" type="submit">Guardar competición</button>
           </form>
         </div>
 
         <div class="admin-card glass-card">
-          <h3>Eventos actuales</h3>
+          <h3>Competiciones actuales (editar, ordenar y borrar)</h3>
           <ul class="admin-list">
             {{EVENT_LIST}}
           </ul>
         </div>
 
         <div class="admin-card glass-card">
-          <h3>Agregar vídeo</h3>
+          <h3>Agregar vídeo o foto</h3>
           <form class="admin-form" action="/admin/videos/add" method="post" enctype="multipart/form-data">
             <div class="form-field">
               <label for="video_title">Título</label>
@@ -157,16 +158,16 @@
               <input id="video_url" name="video_url" type="url" placeholder="https://">
             </div>
             <div class="form-field">
-              <label for="video_file">Subir archivo (mp4, webm, jpg)</label>
+              <label for="video_file">Subir archivo (mp4, webm, ogg, jpg, png, webp)</label>
               <input id="video_file" name="video_file" type="file" accept="video/mp4,video/webm,video/ogg,image/png,image/jpeg,image/webp">
             </div>
-            <button class="btn glass primary" type="submit">Guardar video</button>
+            <button class="btn glass primary" type="submit">Guardar vídeo/foto</button>
           </form>
-          <p class="admin-note">Si no subes archivo, se mostrará un placeholder con enlace.</p>
+          <p class="admin-note">Si no subes archivo, se mostrará placeholder con el enlace externo.</p>
         </div>
 
         <div class="admin-card glass-card">
-          <h3>Vídeos actuales</h3>
+          <h3>Vídeos/fotos actuales (editar, ordenar y borrar)</h3>
           <ul class="admin-list">
             {{VIDEO_LIST}}
           </ul>
@@ -192,7 +193,7 @@
               </div>
               <div class="form-field">
                 <label for="smtp_pass">Contraseña de aplicación</label>
-                <input id="smtp_pass" name="smtp_pass" type="password" value="{{SMTP_PASS}}">
+                <input id="smtp_pass" name="smtp_pass" type="password" value="{{SMTP_PASS}}" placeholder="Dejar vacío para mantener la actual" autocomplete="new-password">
               </div>
             </div>
             <div class="form-row">
@@ -217,6 +218,7 @@
             </div>
             <button class="btn glass primary" type="submit">Guardar SMTP</button>
           </form>
+          <p class="admin-note">Recomendado: configurar credenciales SMTP como variables de entorno en Render (`AURA_SMTP_*`).</p>
         </div>
 
         <div class="admin-card glass-card">
