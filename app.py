@@ -48,11 +48,13 @@ CHATS_PATH = DATA_DIR / "chats.json"
 SESSIONS_PATH = DATA_DIR / "sessions.json"
 SETTINGS_PATH = DATA_DIR / "settings.json"
 CONTENT_PATH = DATA_DIR / "content.json"
+PASSWORD_RESETS_PATH = DATA_DIR / "password_resets.json"
 
 DATA_LOCK = threading.Lock()
 ADMIN_SESSION_COOKIE = "aura_admin_session"
 USER_SESSION_COOKIE = "aura_user_session"
 SESSION_TTL = 12 * 60 * 60
+RESET_TOKEN_TTL = 60 * 60
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 ALLOWED_VIDEO_EXT = {".mp4", ".webm", ".ogg", ".mov"}
@@ -538,14 +540,13 @@ def ensure_data_files() -> None:
     seed_json_key(SESSIONS_PATH, {})
 
     salt, pw_hash = hash_password("admin")
-    smtp_defaults = smtp_defaults_from_env()
     settings = {
         "admin": {"username": "admin", "salt": salt, "hash": pw_hash},
-        "smtp": smtp_defaults,
     }
     seed_json_key(SETTINGS_PATH, settings)
 
     seed_json_key(CONTENT_PATH, DEFAULT_CONTENT)
+    seed_json_key(PASSWORD_RESETS_PATH, {})
 
 
 def copy_default_plan() -> dict:
@@ -649,6 +650,11 @@ def normalize_smtp_settings(settings: dict | None) -> dict:
     normalized["from_name"] = str(normalized.get("from_name", "")).strip() or "Aura Calistenia"
     normalized["admin_email"] = str(normalized.get("admin_email", "")).strip()
     return normalized
+
+
+def load_smtp_settings() -> dict:
+    # SMTP se gestiona por entorno para no guardar secretos en la app.
+    return normalize_smtp_settings(smtp_defaults_from_env())
 
 
 def normalize_plan_item(item) -> dict:
@@ -798,6 +804,75 @@ def clean_sessions(sessions: dict) -> dict:
     return {token: data for token, data in sessions.items() if data.get("expires", 0) > now}
 
 
+def clean_password_resets(tokens: dict) -> dict:
+    now = int(time.time())
+    cleaned: dict[str, dict] = {}
+    for raw_token, data in (tokens or {}).items():
+        if not isinstance(data, dict):
+            continue
+        token = str(raw_token).strip()
+        username = str(data.get("username", "")).strip()
+        email = str(data.get("email", "")).strip().lower()
+        try:
+            expires_at = int(data.get("expires_at", 0) or 0)
+        except (TypeError, ValueError):
+            expires_at = 0
+        if not token or not username or not email or expires_at <= now:
+            continue
+        cleaned[token] = {
+            "username": username,
+            "email": email,
+            "expires_at": expires_at,
+        }
+    return cleaned
+
+
+def load_password_resets() -> dict[str, dict]:
+    stored = load_json(PASSWORD_RESETS_PATH, {})
+    if not isinstance(stored, dict):
+        stored = {}
+    cleaned = clean_password_resets(stored)
+    if cleaned != stored:
+        save_json(PASSWORD_RESETS_PATH, cleaned)
+    return cleaned
+
+
+def create_password_reset_token(username: str, email: str) -> str:
+    tokens = load_password_resets()
+    username_key = username.strip().lower()
+    email_key = email.strip().lower()
+    for token, record in list(tokens.items()):
+        if (
+            str(record.get("username", "")).strip().lower() == username_key
+            and str(record.get("email", "")).strip().lower() == email_key
+        ):
+            tokens.pop(token, None)
+    token = secrets.token_urlsafe(32)
+    tokens[token] = {
+        "username": username.strip(),
+        "email": email.strip().lower(),
+        "expires_at": int(time.time()) + RESET_TOKEN_TTL,
+    }
+    save_json(PASSWORD_RESETS_PATH, tokens)
+    return token
+
+
+def peek_password_reset_token(token: str) -> dict | None:
+    if not token:
+        return None
+    tokens = load_password_resets()
+    return tokens.get(token.strip())
+
+
+def consume_password_reset_token(token: str) -> dict | None:
+    if not token:
+        return None
+    tokens = load_password_resets()
+    payload = tokens.pop(token.strip(), None)
+    save_json(PASSWORD_RESETS_PATH, tokens)
+    return payload
+
+
 def create_session(username: str, role: str) -> str:
     sessions = load_json(SESSIONS_PATH, {})
     sessions = clean_sessions(sessions)
@@ -907,7 +982,6 @@ def build_admin_alert(query: dict[str, list[str]]) -> str:
         "plan_saved": "Plan de entrenamiento actualizado.",
         "comment_added": "Comentario enviado.",
         "submission_deleted": "Envío eliminado.",
-        "smtp_saved": "Configuración SMTP actualizada.",
         "content_saved": "Contenido web actualizado.",
         "client_added": "Alumno creado.",
         "client_duplicated": "Alumno duplicado.",
@@ -930,6 +1004,12 @@ def build_access_alert(status: str, role: str) -> str:
         "user_logout": ("success", "Sesión cerrada."),
         "user_submit_ok": ("success", "Vídeo enviado. Recibirás feedback."),
         "user_submit_error": ("error", "No se pudo enviar el vídeo."),
+        "user_reset_missing": ("error", "Completa usuario y email para recuperar tu acceso."),
+        "user_reset_sent": ("success", "Si los datos coinciden, te hemos enviado un enlace de restablecimiento."),
+        "user_reset_smtp": ("error", "No se pudo enviar el email de recuperación. Revisa SMTP en Render."),
+        "user_reset_invalid": ("error", "El enlace de recuperación no es válido o ha caducado."),
+        "user_reset_mismatch": ("error", "Las contraseñas no coinciden o están vacías."),
+        "user_reset_done": ("success", "Contraseña actualizada. Ya puedes iniciar sesión."),
         "admin_ok": ("success", "Sesión admin activa."),
         "admin_error": ("error", "Credenciales admin incorrectas."),
         "admin_logout": ("success", "Sesión cerrada."),
@@ -948,7 +1028,7 @@ def find_application(applications: list[dict], username: str) -> dict | None:
 
 def render_application_list(applications: list[dict]) -> str:
     items = []
-    for app in applications:
+    for index, app in enumerate(applications):
         raw_id = str(app.get("id", ""))
         app_id = html.escape(raw_id)
         raw_username = str(app.get("username", ""))
@@ -997,29 +1077,49 @@ def render_application_list(applications: list[dict]) -> str:
                 ]
             )
         )
+        search_blob = " ".join([raw_username, raw_email, str(app.get("skill", "")), raw_id]).lower()
+        meta = []
+        if skill:
+            meta.append(f"Skill: {skill}")
+        if goal:
+            meta.append(f"Objetivo: {goal}")
+        if level:
+            meta.append(f"Nivel: {level}")
+        meta.append(f"Estado: {status}")
+        summary = " · ".join(meta) if meta else status
         detail_lines = [
-            f"    <strong>{username}</strong>",
-            f"    <span>ID {app_id}</span>",
-            f"    <span>{email}</span>",
+            f"      <span>ID {app_id}</span>",
+            f"      <span>Email: {email}</span>",
+            f"      <span>Estado: {status}</span>",
         ]
         if skill:
-            detail_lines.append(f"    <span>Skill: {skill}</span>")
+            detail_lines.append(f"      <span>Skill: {skill}</span>")
         if goal:
-            detail_lines.append(f"    <span>Objetivo: {goal}</span>")
+            detail_lines.append(f"      <span>Objetivo: {goal}</span>")
         if level:
-            detail_lines.append(f"    <span>Nivel: {level}</span>")
+            detail_lines.append(f"      <span>Nivel: {level}</span>")
         if concerns:
-            detail_lines.append(f"    <span>Inquietudes: {concerns}</span>")
-        detail_lines.append(f"    <span>Estado: {status}</span>")
-        search_blob = " ".join([raw_username, raw_email, str(app.get("skill", "")), raw_id]).lower()
+            detail_lines.append(f"      <span>Inquietudes: {concerns}</span>")
+        open_attr = " open" if index == 0 else ""
         items.append(
             "\n".join(
                 [
-                    f'<li class="admin-item student-item" data-search="{html.escape(search_blob)}">',
-                    "  <div>",
+                    f'<li class="admin-item admin-edit-item admin-collapsible-item student-item" data-search="{html.escape(search_blob)}">',
+                    f'  <details class="admin-collapsible"{open_attr}>',
+                    '    <summary class="admin-collapsible-summary">',
+                    '      <div class="admin-collapsible-main">',
+                    f"        <strong>{username}</strong>",
+                    f"        <span>{summary}</span>",
+                    "      </div>",
+                    f'      <span class="admin-collapsible-tag">{status}</span>',
+                    "    </summary>",
+                    '    <div class="admin-collapsible-content">',
+                    "      <div>",
                     "\n".join(detail_lines),
-                    "  </div>",
-                    f"  <div class=\"admin-actions\">{''.join(actions)}</div>",
+                    "      </div>",
+                    f"      <div class=\"admin-actions\">{''.join(actions)}</div>",
+                    "    </div>",
+                    "  </details>",
                     "</li>",
                 ]
             )
@@ -1264,23 +1364,33 @@ def render_coach_dashboard(applications: list[dict], storage_status: dict) -> st
     storage_html = "\n".join(storage_lines)
     return "\n".join(
         [
-            '<div class="admin-card glass-card admin-wide coach-dashboard">',
-            "  <div class=\"coach-dashboard-head\">",
-            "    <h3>Gestión de alumnos</h3>",
-            '    <a class="btn glass ghost small" href="/admin/export/json">⬇ Descargar todos los JSON en ZIP</a>',
-            "  </div>",
+            '<div class="admin-card glass-card admin-wide">',
+            '  <details class="admin-collapsible admin-main-collapsible" open>',
+            '    <summary class="admin-collapsible-summary admin-main-summary">',
+            '      <div class="admin-collapsible-main">',
+            "        <strong>Gestión de alumnos</strong>",
+            "        <span>Estado de guardado, métricas y filtro</span>",
+            "      </div>",
+            '      <span class="admin-collapsible-tag">Dashboard</span>',
+            "    </summary>",
+            '    <div class="admin-collapsible-content coach-dashboard">',
+            "      <div class=\"coach-dashboard-head\">",
+            '        <a class="btn glass ghost small" href="/admin/export/json">⬇ Descargar todos los JSON en ZIP</a>',
+            "      </div>",
             storage_html,
-            "  <div class=\"coach-stats\">",
-            f"    <span>Total de alumnos: <strong>{total}</strong></span>",
-            f"    <span>Activos: <strong>{approved}</strong></span>",
-            f"    <span>Pendientes: <strong>{pending}</strong></span>",
-            f"    <span>Altas este mes: <strong>{this_month}</strong></span>",
-            f"    <span>Posibles duplicados: <strong>{duplicate_rows}</strong></span>",
-            "  </div>",
-            '  <div class="form-field">',
-            '    <label for="student_search">Buscar alumno (usuario, email o ID)</label>',
-            '    <input id="student_search" type="text" placeholder="Escribe para filtrar...">',
-            "  </div>",
+            "      <div class=\"coach-stats\">",
+            f"        <span>Total de alumnos: <strong>{total}</strong></span>",
+            f"        <span>Activos: <strong>{approved}</strong></span>",
+            f"        <span>Pendientes: <strong>{pending}</strong></span>",
+            f"        <span>Altas este mes: <strong>{this_month}</strong></span>",
+            f"        <span>Posibles duplicados: <strong>{duplicate_rows}</strong></span>",
+            "      </div>",
+            '      <div class="form-field">',
+            '        <label for="student_search">Buscar alumno (usuario, email o ID)</label>',
+            '        <input id="student_search" type="text" placeholder="Escribe para filtrar...">',
+            "      </div>",
+            "    </div>",
+            "  </details>",
             "</div>",
         ]
     )
@@ -1569,6 +1679,119 @@ def render_admin_submissions(submissions: list[dict]) -> str:
     return "\n".join(cards) if cards else "<p class=\"form-note\">Sin envíos todavía.</p>"
 
 
+def render_forgot_password_block(prefix: str) -> str:
+    safe_prefix = re.sub(r"[^a-z0-9_-]", "", prefix.lower()) or "reset"
+    user_id = f"{safe_prefix}_reset_user"
+    email_id = f"{safe_prefix}_reset_email"
+    return "\n".join(
+        [
+            '<details class="forgot-password-block">',
+            "  <summary>¿Olvidaste tu contraseña?</summary>",
+            '  <form class="admin-form" action="/password/forgot" method="post">',
+            '    <div class="form-row">',
+            '      <div class="form-field">',
+            f'        <label for="{user_id}">Usuario</label>',
+            f'        <input id="{user_id}" name="username" type="text" required>',
+            "      </div>",
+            '      <div class="form-field">',
+            f'        <label for="{email_id}">Email</label>',
+            f'        <input id="{email_id}" name="email" type="email" required>',
+            "      </div>",
+            "    </div>",
+            '    <button class="btn glass ghost small" type="submit">Enviar enlace</button>',
+            '    <p class="form-note">Usa el mismo usuario y correo con el que te registraste.</p>',
+            "  </form>",
+            "</details>",
+        ]
+    )
+
+
+def render_password_reset_page(query: dict[str, list[str]]) -> str:
+    token = (query.get("token") or [""])[0].strip()
+    access_status = (query.get("access") or [""])[0]
+    reset_data = peek_password_reset_token(token) if token else None
+
+    if not access_status and token and not reset_data:
+        access_status = "user_reset_invalid"
+    alert = build_access_alert(access_status, "user")
+
+    if reset_data:
+        username = html.escape(str(reset_data.get("username", "")))
+        card = "\n".join(
+            [
+                '<div class="admin-login glass-card">',
+                "  <h2>Restablecer contraseña</h2>",
+                f"  {alert}" if alert else "",
+                f"  <p>Vas a actualizar la contraseña de <strong>{username}</strong>.</p>",
+                '  <form class="admin-form" action="/password/reset" method="post">',
+                f'    <input type="hidden" name="token" value="{html.escape(token)}">',
+                '    <div class="form-field">',
+                '      <label for="reset_password">Nueva contraseña</label>',
+                '      <input id="reset_password" name="password" type="password" required>',
+                "    </div>",
+                '    <div class="form-field">',
+                '      <label for="reset_password_confirm">Repite la contraseña</label>',
+                '      <input id="reset_password_confirm" name="password_confirm" type="password" required>',
+                "    </div>",
+                '    <button class="btn glass primary" type="submit">Guardar contraseña</button>',
+                "  </form>",
+                '  <a class="btn glass ghost small" href="/portal">Volver al acceso</a>',
+                "</div>",
+            ]
+        )
+    else:
+        fallback_alert = alert or build_access_alert("user_reset_invalid", "user")
+        card = "\n".join(
+            [
+                '<div class="admin-login glass-card">',
+                "  <h2>Restablecer contraseña</h2>",
+                f"  {fallback_alert}" if fallback_alert else "",
+                "  <p>Solicita un nuevo enlace desde el acceso de alumnos.</p>",
+                '  <a class="btn glass primary" href="/portal">Ir al portal</a>',
+                "</div>",
+            ]
+        )
+
+    return "\n".join(
+        [
+            "<!doctype html>",
+            "<html lang=\"es\">",
+            "  <head>",
+            "    <meta charset=\"utf-8\">",
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+            "    <title>Restablecer contraseña - Aura Calistenia</title>",
+            "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
+            "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
+            "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260218-1\">",
+            "  </head>",
+            "  <body class=\"admin-body\">",
+            "    <div class=\"noise\" aria-hidden=\"true\"></div>",
+            "    <header class=\"nav\">",
+            "      <div class=\"nav-inner\">",
+            "        <nav class=\"nav-group nav-left\"></nav>",
+            "        <a class=\"nav-brand\" href=\"/\" aria-label=\"Aura Calistenia\">",
+            "          <span class=\"brand-mark\" aria-hidden=\"true\"></span>",
+            "        </a>",
+            "        <nav class=\"nav-group nav-right\">",
+            "          <a href=\"/\">Inicio</a>",
+            "          <a href=\"/portal\">Portal</a>",
+            "        </nav>",
+            "        <nav class=\"nav-group nav-compact\" aria-label=\"Navegación\">",
+            "          <a href=\"/\">Inicio</a>",
+            "          <a href=\"/portal\">Portal</a>",
+            "        </nav>",
+            "      </div>",
+            "    </header>",
+            "    <main class=\"section\">",
+            f"      {card}",
+            "    </main>",
+            "  </body>",
+            "</html>",
+        ]
+    )
+
+
 def render_access_section(query: dict[str, list[str]], cookie_header: str | None) -> str:
     access_status = (query.get("access") or [""])[0]
     user_alert = build_access_alert(access_status, "user")
@@ -1615,6 +1838,7 @@ def render_access_section(query: dict[str, list[str]], cookie_header: str | None
         )
 
     alert = user_alert or admin_alert
+    forgot_block = render_forgot_password_block("home")
     login_card = "\n".join(
         [
             '<div class="portal-card glass-card stagger-item">',
@@ -1632,6 +1856,7 @@ def render_access_section(query: dict[str, list[str]], cookie_header: str | None
             "    </div>",
             "    <button class=\"btn glass primary\" type=\"submit\">Entrar</button>",
             "  </form>",
+            forgot_block,
             "</div>",
         ]
     )
@@ -2015,7 +2240,7 @@ def render_index(query: dict[str, list[str]], cookie_header: str | None) -> str:
     return render_template(INDEX_TEMPLATE, replacements)
 
 
-def render_plan_editor(applications: list[dict], selected_user: str) -> str:
+def render_plan_editor(applications: list[dict], selected_user: str, expanded: bool = False) -> str:
     if not applications:
         return (
             '<div class="admin-card glass-card admin-wide">'
@@ -2150,11 +2375,21 @@ def render_plan_editor(applications: list[dict], selected_user: str) -> str:
         ]
     )
     chat_panel_html = render_chat_panel(selected_user, "admin") if selected_user else ""
+    open_attr = " open" if expanded else ""
 
     return "\n".join(
         [
-            '<div id="plan" class="admin-card glass-card admin-wide plan-editor">',
-            "  <h3>Plan de entrenamiento por alumno</h3>",
+            '<div id="plan" class="admin-card glass-card admin-wide">',
+            f'  <details class="admin-collapsible admin-main-collapsible"{open_attr}>',
+            '    <summary class="admin-collapsible-summary admin-main-summary">',
+            '      <div class="admin-collapsible-main">',
+            "        <strong>Plan de entrenamiento por alumno</strong>",
+            f"        <span>Alumno actual: {html.escape(selected_user)}</span>",
+            "      </div>",
+            '      <span class="admin-collapsible-tag">Plan</span>',
+            "    </summary>",
+            '    <div class="admin-collapsible-content">',
+            '      <div class="plan-editor">',
             selector_html,
             progress_card_html,
             "  <div class=\"plan-tools\">",
@@ -2271,6 +2506,9 @@ def render_plan_editor(applications: list[dict], selected_user: str) -> str:
             f'  <script type="application/json" id="plan-data">{plan_json}</script>',
             f'  <script type="application/json" id="plan-progress-data">{progress_json}</script>',
             f'  <script type="application/json" id="coach-chat-data">{chat_json}</script>',
+            "      </div>",
+            "    </div>",
+            "  </details>",
             "</div>",
         ]
     )
@@ -2445,26 +2683,17 @@ def render_admin_page(query: dict[str, list[str]]) -> str:
     applications = load_applications()
     content = load_content()
     storage_status = get_storage_status()
-    settings = load_json(SETTINGS_PATH, {})
-    smtp = normalize_smtp_settings(settings.get("smtp", {}))
-    settings["smtp"] = smtp
     selected_user = (query.get("plan_user") or [""])[0]
+    status = (query.get("status") or [""])[0]
+    plan_expanded = bool(selected_user or status == "plan_saved")
     replacements = {
         "ADMIN_MESSAGE": build_admin_alert(query),
         "COACH_DASHBOARD": render_coach_dashboard(applications, storage_status),
-        "PLAN_EDITOR": render_plan_editor(applications, selected_user),
+        "PLAN_EDITOR": render_plan_editor(applications, selected_user, expanded=plan_expanded),
         "CONTENT_FORM": render_content_form(content),
         "EVENT_LIST": render_event_list(events),
         "VIDEO_LIST": render_video_list(videos),
         "APPLICATION_LIST": render_application_list(applications),
-        "SMTP_HOST": html.escape(str(smtp.get("host", ""))),
-        "SMTP_PORT": html.escape(str(smtp.get("port", ""))),
-        "SMTP_USER": html.escape(str(smtp.get("username", ""))),
-        "SMTP_PASS": "",
-        "SMTP_FROM": html.escape(str(smtp.get("from_name", ""))),
-        "SMTP_ADMIN": html.escape(str(smtp.get("admin_email", ""))),
-        "SMTP_ENABLED": "checked" if smtp.get("enabled") else "",
-        "SMTP_TLS": "checked" if smtp.get("use_tls") else "",
     }
     return render_template(ADMIN_TEMPLATE, replacements)
 
@@ -2484,7 +2713,7 @@ def render_login_page(error: str | None = None) -> str:
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260217-2\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260218-1\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -2532,6 +2761,7 @@ def render_portal_page(query: dict[str, list[str]], cookie_header: str | None) -
     applications = load_applications()
 
     if not portal_user:
+        forgot_block = render_forgot_password_block("portal")
         login_card = "\n".join(
             [
                 '<div class="portal-card glass-card stagger-item">',
@@ -2549,6 +2779,7 @@ def render_portal_page(query: dict[str, list[str]], cookie_header: str | None) -
                 "    </div>",
                 "    <button class=\"btn glass primary\" type=\"submit\">Entrar</button>",
                 "  </form>",
+                forgot_block,
                 "</div>",
             ]
         )
@@ -2588,8 +2819,14 @@ def render_portal_page(query: dict[str, list[str]], cookie_header: str | None) -
             '<div class="access-grid" data-stagger>',
             summary,
             "</div>",
-            plan_html,
-            chat_html,
+            '<details class="portal-collapsible" open>',
+            "  <summary>Plan de entrenamiento</summary>",
+            f"  {plan_html}",
+            "</details>",
+            '<details class="portal-collapsible">',
+            "  <summary>Chat con tu profesor</summary>",
+            f"  {chat_html}",
+            "</details>",
         ]
     )
     return render_template(PORTAL_TEMPLATE, {"PORTAL_CONTENT": portal_content})
@@ -2819,6 +3056,40 @@ def notify_application(application: dict, smtp_settings: dict) -> tuple[bool, st
     return True, "ok"
 
 
+def notify_password_reset(username: str, email_value: str, reset_url: str, smtp_settings: dict) -> tuple[bool, str]:
+    if not smtp_settings.get("enabled"):
+        return False, "smtp_disabled"
+    required = [smtp_settings.get("host"), smtp_settings.get("username"), smtp_settings.get("password")]
+    if not all(required):
+        return False, "smtp_incomplete"
+
+    subject = "Restablecer contraseña - Aura Calistenia"
+    ttl_minutes = max(int(RESET_TOKEN_TTL / 60), 1)
+    body = (
+        "Has solicitado restablecer tu contraseña.\n\n"
+        f"Usuario: {username}\n"
+        f"Enlace de restablecimiento: {reset_url}\n\n"
+        f"Este enlace caduca en {ttl_minutes} minutos."
+    )
+    html_body = "\n".join(
+        [
+            "<html><body style=\"font-family:Arial,sans-serif;background:#f5f7fb;color:#1e2330;\">",
+            "<div style=\"max-width:640px;margin:24px auto;background:#ffffff;border:1px solid #e4e8f0;border-radius:14px;padding:24px;\">",
+            "<h2 style=\"margin:0 0 12px 0;color:#b08b4a;\">Restablecer contraseña</h2>",
+            f"<p style=\"margin:0 0 8px 0;\">Hola <strong>{html.escape(username)}</strong>,</p>",
+            "<p style=\"margin:0 0 14px 0;color:#5f677a;\">Pulsa en el botón para crear una contraseña nueva.</p>",
+            f"<p style=\"margin:0 0 14px 0;\"><a href=\"{html.escape(reset_url)}\" style=\"display:inline-block;padding:12px 18px;background:#0d7e57;color:#fff;text-decoration:none;border-radius:10px;\">Restablecer contraseña</a></p>",
+            f"<p style=\"margin:0;color:#5f677a;\">Este enlace caduca en {ttl_minutes} minutos. Si no lo solicitaste, ignora este correo.</p>",
+            "</div></body></html>",
+        ]
+    )
+    try:
+        send_email(smtp_settings, email_value, subject, body, html_body=html_body)
+    except Exception:
+        return False, "smtp_failed"
+    return True, "ok"
+
+
 def handle_file_upload(field: UploadedFile) -> tuple[str, str] | None:
     if not field.filename:
         return None
@@ -2889,6 +3160,30 @@ class AuraHandler(SimpleHTTPRequestHandler):
         else:
             self.redirect(f"/?admin_status={status}#acceso")
 
+    def redirect_user_access(self, status: str) -> None:
+        referer = self.headers.get("Referer", "")
+        target = "/portal" if "/portal" in referer else "/"
+        suffix = f"?access={status}" + ("" if target == "/portal" else "#acceso")
+        self.redirect(f"{target}{suffix}")
+
+    def get_public_base_url(self) -> str:
+        forwarded = self.headers.get("Forwarded", "")
+        proto = self.headers.get("X-Forwarded-Proto", "").split(",", 1)[0].strip()
+        host = self.headers.get("X-Forwarded-Host", "").split(",", 1)[0].strip()
+        if not host:
+            host = self.headers.get("Host", "").split(",", 1)[0].strip()
+        if not host:
+            host = "localhost:8000"
+        if not proto and "proto=https" in forwarded.lower():
+            proto = "https"
+        if proto not in {"http", "https"}:
+            host_lower = host.lower()
+            if host_lower.startswith("localhost") or host_lower.startswith("127.0.0.1"):
+                proto = "http"
+            else:
+                proto = "https"
+        return f"{proto}://{host}"
+
     def handle_export_json(self) -> None:
         timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())
         memory = BytesIO()
@@ -2901,6 +3196,7 @@ class AuraHandler(SimpleHTTPRequestHandler):
             ("sessions.json", SESSIONS_PATH),
             ("settings.json", SETTINGS_PATH),
             ("content.json", CONTENT_PATH),
+            ("password_resets.json", PASSWORD_RESETS_PATH),
         ]
         with ZipFile(memory, mode="w", compression=ZIP_DEFLATED) as bundle:
             defaults = {
@@ -2912,6 +3208,7 @@ class AuraHandler(SimpleHTTPRequestHandler):
                 "sessions.json": {},
                 "settings.json": {},
                 "content.json": {},
+                "password_resets.json": {},
             }
             for archive_name, source_path in files:
                 payload = load_json(source_path, defaults.get(archive_name, {}))
@@ -2947,6 +3244,10 @@ class AuraHandler(SimpleHTTPRequestHandler):
 
         if path == "/portal" or path == "/portal/":
             self.send_html(render_portal_page(query, self.headers.get("Cookie")))
+            return
+
+        if path == "/password/reset":
+            self.send_html(render_password_reset_page(query))
             return
 
         if path == "/admin/export/json":
@@ -2985,6 +3286,14 @@ class AuraHandler(SimpleHTTPRequestHandler):
 
         if path == "/logout":
             self.handle_user_logout()
+            return
+
+        if path == "/password/forgot":
+            self.handle_password_forgot()
+            return
+
+        if path == "/password/reset":
+            self.handle_password_reset()
             return
 
         if path == "/user/submissions/add":
@@ -3042,10 +3351,6 @@ class AuraHandler(SimpleHTTPRequestHandler):
 
         if path == "/admin/videos/delete":
             self.handle_video_delete()
-            return
-
-        if path == "/admin/settings":
-            self.handle_settings_update()
             return
 
         if path == "/admin/plan/update":
@@ -3127,8 +3432,7 @@ class AuraHandler(SimpleHTTPRequestHandler):
         applications.append(application)
         save_json(APPLICATIONS_PATH, applications)
 
-        settings = load_json(SETTINGS_PATH, {})
-        smtp_settings = normalize_smtp_settings(settings.get("smtp", {}))
+        smtp_settings = load_smtp_settings()
         ok, reason = notify_application(application, smtp_settings)
         if ok:
             self.redirect("/?status=ok")
@@ -3241,6 +3545,72 @@ class AuraHandler(SimpleHTTPRequestHandler):
         suffix = "?access=user_logout" + ("" if target == "/portal" else "#acceso")
         self.send_header("Location", f"{target}{suffix}")
         self.end_headers()
+
+    def handle_password_forgot(self) -> None:
+        data, _ = parse_post_data(self)
+        username = data.get("username", "").strip()
+        email_value = data.get("email", "").strip().lower()
+        if not username or not email_value:
+            self.redirect_user_access("user_reset_missing")
+            return
+
+        applications = load_applications()
+        app = find_application(applications, username)
+        if not app:
+            self.redirect_user_access("user_reset_sent")
+            return
+        app_email = str(app.get("email", "")).strip().lower()
+        if app_email != email_value:
+            self.redirect_user_access("user_reset_sent")
+            return
+
+        token = create_password_reset_token(str(app.get("username", username)).strip(), app_email)
+        reset_url = f"{self.get_public_base_url()}/password/reset?token={urllib.parse.quote(token)}"
+        smtp_settings = load_smtp_settings()
+        ok, reason = notify_password_reset(str(app.get("username", username)).strip(), app_email, reset_url, smtp_settings)
+        if not ok:
+            consume_password_reset_token(token)
+            if reason in {"smtp_disabled", "smtp_incomplete", "smtp_failed"}:
+                self.redirect_user_access("user_reset_smtp")
+                return
+            self.redirect_user_access("user_reset_invalid")
+            return
+        self.redirect_user_access("user_reset_sent")
+
+    def handle_password_reset(self) -> None:
+        data, _ = parse_post_data(self)
+        token = data.get("token", "").strip()
+        password = data.get("password", "").strip()
+        password_confirm = data.get("password_confirm", "").strip()
+        if not token:
+            self.redirect("/password/reset?access=user_reset_invalid")
+            return
+        if not password or password != password_confirm:
+            quoted = urllib.parse.quote(token)
+            self.redirect(f"/password/reset?token={quoted}&access=user_reset_mismatch")
+            return
+
+        payload = consume_password_reset_token(token)
+        if not payload:
+            self.redirect("/password/reset?access=user_reset_invalid")
+            return
+
+        username = str(payload.get("username", "")).strip()
+        email_value = str(payload.get("email", "")).strip().lower()
+        applications = load_applications()
+        app = find_application(applications, username)
+        if not app:
+            self.redirect("/password/reset?access=user_reset_invalid")
+            return
+        if str(app.get("email", "")).strip().lower() != email_value:
+            self.redirect("/password/reset?access=user_reset_invalid")
+            return
+
+        salt, pw_hash = hash_password(password)
+        app["salt"] = salt
+        app["hash"] = pw_hash
+        save_json(APPLICATIONS_PATH, applications)
+        self.redirect("/portal?access=user_reset_done")
 
     def handle_event_add(self) -> None:
         data, _ = parse_post_data(self)
@@ -3429,32 +3799,6 @@ class AuraHandler(SimpleHTTPRequestHandler):
             remaining.append(video)
         save_json(VIDEOS_PATH, remaining)
         self.admin_redirect("video_deleted")
-
-    def handle_settings_update(self) -> None:
-        data, _ = parse_post_data(self)
-        settings = load_json(SETTINGS_PATH, {})
-        smtp = normalize_smtp_settings(settings.get("smtp", {}))
-        try:
-            port = int(data.get("smtp_port", 587) or 587)
-        except ValueError:
-            port = 587
-        password_value = data.get("smtp_pass", "").strip()
-        if password_value:
-            smtp["password"] = password_value
-        smtp.update(
-            {
-                "host": data.get("smtp_host", "").strip(),
-                "port": port,
-                "username": data.get("smtp_user", "").strip(),
-                "from_name": data.get("smtp_from", "").strip() or "Aura Calistenia",
-                "admin_email": data.get("smtp_admin", "").strip(),
-                "enabled": "smtp_enabled" in data,
-                "use_tls": "smtp_tls" in data,
-            }
-        )
-        settings["smtp"] = smtp
-        save_json(SETTINGS_PATH, settings)
-        self.admin_redirect("smtp_saved")
 
     def handle_content_update(self) -> None:
         data, files = parse_post_data(self)
