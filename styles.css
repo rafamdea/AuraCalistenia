@@ -1497,6 +1497,49 @@ h3 {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.5);
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+
+.footer-legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+}
+
+.footer-legal-links a {
+  color: rgba(255, 255, 255, 0.72);
+  text-decoration: none;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  font-size: 0.78rem;
+}
+
+.footer-legal-links a:hover {
+  color: var(--green-300);
+}
+
+.legal-page .container {
+  display: grid;
+  gap: 18px;
+}
+
+.legal-card {
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(9, 17, 13, 0.7);
+}
+
+.legal-card h2 {
+  margin-bottom: 10px;
+  font-size: clamp(1.2rem, 2vw, 1.7rem);
+}
+
+.legal-card p {
+  color: rgba(255, 255, 255, 0.78);
+  margin-bottom: 10px;
 }
 
 .form-card {

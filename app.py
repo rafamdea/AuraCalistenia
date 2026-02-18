@@ -96,6 +96,7 @@ if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", DB_TABLE):
     DB_TABLE = "aura_state"
 DAY_LABELS = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
 DB_LAST_ERROR = ""
+SMTP_LAST_ERROR = ""
 
 
 @dataclass
@@ -354,6 +355,16 @@ def remember_db_error(exc: Exception) -> None:
     DB_LAST_ERROR = f"{type(exc).__name__}: {exc}"
 
 
+def remember_smtp_error(exc: Exception) -> None:
+    global SMTP_LAST_ERROR
+    SMTP_LAST_ERROR = f"{type(exc).__name__}: {exc}"
+
+
+def clear_smtp_error() -> None:
+    global SMTP_LAST_ERROR
+    SMTP_LAST_ERROR = ""
+
+
 def db_connect():
     if not db_enabled():
         return None
@@ -546,6 +557,7 @@ def smtp_defaults_from_env() -> dict:
         "from_name": os.environ.get("AURA_SMTP_FROM", "").strip() or "Aura Calistenia",
         "admin_email": os.environ.get("AURA_SMTP_ADMIN", "").strip(),
         "use_tls": parse_bool_env(os.environ.get("AURA_SMTP_TLS"), True),
+        "use_ssl": parse_bool_env(os.environ.get("AURA_SMTP_SSL"), False),
     }
 
 
@@ -681,7 +693,7 @@ def normalize_smtp_settings(settings: dict | None) -> dict:
     if not isinstance(settings, dict):
         return defaults
     normalized = defaults.copy()
-    for key in ("enabled", "host", "port", "username", "password", "from_name", "admin_email", "use_tls"):
+    for key in ("enabled", "host", "port", "username", "password", "from_name", "admin_email", "use_tls", "use_ssl"):
         if key in settings:
             normalized[key] = settings.get(key)
     if not isinstance(normalized.get("port"), int):
@@ -691,6 +703,7 @@ def normalize_smtp_settings(settings: dict | None) -> dict:
             normalized["port"] = 587
     normalized["enabled"] = bool(normalized.get("enabled"))
     normalized["use_tls"] = bool(normalized.get("use_tls"))
+    normalized["use_ssl"] = bool(normalized.get("use_ssl"))
     normalized["host"] = str(normalized.get("host", "")).strip()
     normalized["username"] = str(normalized.get("username", "")).strip()
     normalized["password"] = str(normalized.get("password", "")).strip()
@@ -702,6 +715,17 @@ def normalize_smtp_settings(settings: dict | None) -> dict:
 def load_smtp_settings() -> dict:
     # SMTP se gestiona por entorno para no guardar secretos en la app.
     return normalize_smtp_settings(smtp_defaults_from_env())
+
+
+def smtp_missing_fields(smtp_settings: dict) -> list[str]:
+    missing = []
+    if not str(smtp_settings.get("host", "")).strip():
+        missing.append("AURA_SMTP_HOST")
+    if not str(smtp_settings.get("username", "")).strip():
+        missing.append("AURA_SMTP_USER")
+    if not str(smtp_settings.get("password", "")).strip():
+        missing.append("AURA_SMTP_PASS")
+    return missing
 
 
 def normalize_plan_item(item) -> dict:
@@ -1007,9 +1031,15 @@ def build_form_alert(query: dict[str, list[str]]) -> str:
     if status == "ok":
         text = "Solicitud recibida. Revisa tu email para confirmar el acceso."
         level = "success"
-    elif status == "smtp":
-        text = "Solicitud recibida, pero SMTP no está configurado."
-        level = "success"
+    elif status == "smtp_disabled":
+        text = "Solicitud guardada, pero el envío de correo está desactivado (AURA_SMTP_ENABLED)."
+        level = "error"
+    elif status == "smtp_incomplete":
+        text = message or "Falta configurar variables SMTP en Render."
+        level = "error"
+    elif status == "smtp_error":
+        text = "No se pudo enviar el correo (error SMTP). Revisa host, puerto, TLS/SSL y contraseña de aplicación."
+        level = "error"
     else:
         text = message or "No se pudo enviar la solicitud."
         level = "error"
@@ -1061,6 +1091,18 @@ def build_access_alert(status: str, role: str) -> str:
         "user_reset_missing": ("error", "Completa usuario y email para recuperar tu acceso."),
         "user_reset_sent": ("success", "Si los datos coinciden, te hemos enviado un enlace de restablecimiento."),
         "user_reset_smtp": ("error", "No se pudo enviar el email de recuperación. Revisa SMTP en Render."),
+        "user_reset_smtp_disabled": (
+            "error",
+            "No se pudo enviar el email: el envío SMTP está desactivado (AURA_SMTP_ENABLED).",
+        ),
+        "user_reset_smtp_incomplete": (
+            "error",
+            "No se pudo enviar el email: faltan variables SMTP (HOST/USER/PASS) en Render.",
+        ),
+        "user_reset_smtp_failed": (
+            "error",
+            "No se pudo enviar el email de recuperación por error SMTP. Revisa host, puerto, TLS/SSL y contraseña.",
+        ),
         "user_reset_invalid": ("error", "El enlace de recuperación no es válido o ha caducado."),
         "user_reset_mismatch": ("error", "Las contraseñas no coinciden o están vacías."),
         "user_reset_done": ("success", "Contraseña actualizada. Ya puedes iniciar sesión."),
@@ -1416,6 +1458,59 @@ def render_coach_dashboard(applications: list[dict], storage_status: dict) -> st
         )
     storage_lines.append("  </div>")
     storage_html = "\n".join(storage_lines)
+
+    smtp_settings = load_smtp_settings()
+    smtp_enabled = bool(smtp_settings.get("enabled"))
+    smtp_missing = smtp_missing_fields(smtp_settings)
+    smtp_error = SMTP_LAST_ERROR.strip()
+    smtp_class = "storage-local"
+    smtp_title = "SMTP desactivado"
+    smtp_detail = "Activa AURA_SMTP_ENABLED=true para enviar correos de registro y recuperación."
+    if smtp_enabled and smtp_missing:
+        smtp_class = "storage-error"
+        smtp_title = "SMTP incompleto"
+        smtp_detail = f"Faltan variables: {', '.join(smtp_missing)}."
+    elif smtp_enabled and smtp_error:
+        smtp_class = "storage-error"
+        smtp_title = "SMTP con error"
+        smtp_detail = "Hubo un error de envío. Abre el detalle técnico para ver la causa exacta."
+    elif smtp_enabled:
+        smtp_class = "storage-ok"
+        smtp_title = "SMTP listo"
+        smtp_detail = "Configuración cargada. Registro y recuperación deberían enviar correo."
+
+    smtp_host = str(smtp_settings.get("host", "")).strip() or "(vacío)"
+    smtp_user = str(smtp_settings.get("username", "")).strip() or "(vacío)"
+    smtp_admin = str(smtp_settings.get("admin_email", "")).strip() or "(usa AURA_SMTP_USER)"
+    smtp_port = int(smtp_settings.get("port", 587))
+    smtp_tls = bool(smtp_settings.get("use_tls", True))
+    smtp_ssl = bool(smtp_settings.get("use_ssl", False))
+    smtp_security = "SSL directo" if smtp_ssl else ("STARTTLS" if smtp_tls else "Sin STARTTLS")
+
+    smtp_lines = [
+        f'  <div class="storage-pill {smtp_class}">',
+        '    <span class="storage-pill-label">Estado SMTP</span>',
+        f"    <strong>{html.escape(smtp_title)}</strong>",
+        f"    <span>{html.escape(smtp_detail)}</span>",
+        (
+            "    <span>"
+            f"Host: {html.escape(smtp_host)} · Puerto: {smtp_port} · Seguridad: {html.escape(smtp_security)}"
+            "</span>"
+        ),
+        f"    <span>Usuario SMTP: {html.escape(smtp_user)}</span>",
+        f"    <span>Bandeja admin: {html.escape(smtp_admin)}</span>",
+    ]
+    if smtp_error:
+        smtp_lines.extend(
+            [
+                '    <details class="storage-pill-debug">',
+                "      <summary>Ver detalle técnico SMTP</summary>",
+                f"      <pre>{html.escape(smtp_error)}</pre>",
+                "    </details>",
+            ]
+        )
+    smtp_lines.append("  </div>")
+    smtp_html = "\n".join(smtp_lines)
     return "\n".join(
         [
             '<div class="admin-card glass-card admin-wide">',
@@ -1432,6 +1527,7 @@ def render_coach_dashboard(applications: list[dict], storage_status: dict) -> st
             '        <a class="btn glass ghost small" href="/admin/export/json">⬇ Descargar todos los JSON en ZIP</a>',
             "      </div>",
             storage_html,
+            smtp_html,
             "      <div class=\"coach-stats\">",
             f"        <span>Total de alumnos: <strong>{total}</strong></span>",
             f"        <span>Activos: <strong>{approved}</strong></span>",
@@ -1825,7 +1921,7 @@ def render_password_reset_page(query: dict[str, list[str]]) -> str:
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260218-4\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260218-5\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -2792,7 +2888,7 @@ def render_login_page(error: str | None = None) -> str:
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260218-4\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260218-5\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -3050,6 +3146,18 @@ def send_email(
     username = smtp_settings.get("username")
     password = smtp_settings.get("password")
     use_tls = smtp_settings.get("use_tls", True)
+    use_ssl = smtp_settings.get("use_ssl", False)
+    if port == 465 and not use_ssl:
+        # Fallback automático para proveedores que usan SMTPS directo en 465.
+        use_ssl = True
+        use_tls = False
+
+    if use_ssl:
+        with smtplib.SMTP_SSL(host, port, timeout=10) as server:
+            if username and password:
+                server.login(username, password)
+            server.send_message(msg)
+        return
 
     with smtplib.SMTP(host, port, timeout=10) as server:
         if use_tls:
@@ -3062,8 +3170,7 @@ def send_email(
 def notify_application(application: dict, smtp_settings: dict) -> tuple[bool, str]:
     if not smtp_settings.get("enabled"):
         return False, "smtp_disabled"
-    required = [smtp_settings.get("host"), smtp_settings.get("username"), smtp_settings.get("password")]
-    if not all(required):
+    if smtp_missing_fields(smtp_settings):
         return False, "smtp_incomplete"
 
     admin_email = smtp_settings.get("admin_email") or smtp_settings.get("username")
@@ -3146,7 +3253,9 @@ def notify_application(application: dict, smtp_settings: dict) -> tuple[bool, st
         )
         if email_value:
             send_email(smtp_settings, email_value, user_subject, user_body, html_body=user_html)
-    except Exception:
+        clear_smtp_error()
+    except Exception as exc:
+        remember_smtp_error(exc)
         return False, "smtp_failed"
 
     return True, "ok"
@@ -3155,8 +3264,7 @@ def notify_application(application: dict, smtp_settings: dict) -> tuple[bool, st
 def notify_password_reset(username: str, email_value: str, reset_url: str, smtp_settings: dict) -> tuple[bool, str]:
     if not smtp_settings.get("enabled"):
         return False, "smtp_disabled"
-    required = [smtp_settings.get("host"), smtp_settings.get("username"), smtp_settings.get("password")]
-    if not all(required):
+    if smtp_missing_fields(smtp_settings):
         return False, "smtp_incomplete"
 
     subject = "Restablecer contraseña - Aura Calistenia"
@@ -3181,7 +3289,9 @@ def notify_password_reset(username: str, email_value: str, reset_url: str, smtp_
     )
     try:
         send_email(smtp_settings, email_value, subject, body, html_body=html_body)
-    except Exception:
+        clear_smtp_error()
+    except Exception as exc:
+        remember_smtp_error(exc)
         return False, "smtp_failed"
     return True, "ok"
 
@@ -3529,14 +3639,26 @@ class AuraHandler(SimpleHTTPRequestHandler):
         save_json(APPLICATIONS_PATH, applications)
 
         smtp_settings = load_smtp_settings()
+        if not smtp_settings.get("enabled"):
+            self.redirect("/?status=smtp_disabled")
+            return
+        missing = smtp_missing_fields(smtp_settings)
+        if missing:
+            detail = urllib.parse.quote(f"Faltan variables en Render: {', '.join(missing)}")
+            self.redirect(f"/?status=smtp_incomplete&message={detail}")
+            return
         ok, reason = notify_application(application, smtp_settings)
         if ok:
             self.redirect("/?status=ok")
             return
-        if reason in {"smtp_disabled", "smtp_incomplete"}:
-            self.redirect("/?status=smtp")
+        if reason == "smtp_incomplete":
+            detail = urllib.parse.quote("Faltan variables SMTP (HOST/USER/PASS).")
+            self.redirect(f"/?status=smtp_incomplete&message={detail}")
             return
-        self.redirect("/?status=error&message=Error enviando email")
+        if reason == "smtp_disabled":
+            self.redirect("/?status=smtp_disabled")
+            return
+        self.redirect("/?status=smtp_error")
 
     def handle_admin_login(self) -> None:
         data, _ = parse_post_data(self)
@@ -3681,8 +3803,14 @@ class AuraHandler(SimpleHTTPRequestHandler):
         ok, reason = notify_password_reset(str(app.get("username", username)).strip(), app_email, reset_url, smtp_settings)
         if not ok:
             consume_password_reset_token(token)
-            if reason in {"smtp_disabled", "smtp_incomplete", "smtp_failed"}:
-                self.redirect_user_access("user_reset_smtp")
+            if reason == "smtp_disabled":
+                self.redirect_user_access("user_reset_smtp_disabled")
+                return
+            if reason == "smtp_incomplete":
+                self.redirect_user_access("user_reset_smtp_incomplete")
+                return
+            if reason == "smtp_failed":
+                self.redirect_user_access("user_reset_smtp_failed")
                 return
             self.redirect_user_access("user_reset_invalid")
             return
