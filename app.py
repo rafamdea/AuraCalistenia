@@ -102,8 +102,8 @@ DATABASE_URL, DATABASE_URL_SOURCE = resolve_database_url()
 DB_TABLE = os.environ.get("AURA_DB_TABLE", "aura_state").strip() or "aura_state"
 if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", DB_TABLE):
     DB_TABLE = "aura_state"
-DEFAULT_ADMIN_USERNAME = normalize_env_literal(os.environ.get("AURA_ADMIN_USER")) or "rmonale"
-DEFAULT_ADMIN_PASSWORD = normalize_env_literal(os.environ.get("AURA_ADMIN_PASS")) or "Adminaura123!"
+DEFAULT_ADMIN_USERNAME = "rmonale"
+DEFAULT_ADMIN_PASSWORD = "Adminaura123!"
 DAY_LABELS = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
 DB_LAST_ERROR = ""
 SMTP_LAST_ERROR = ""
@@ -803,16 +803,25 @@ def ensure_data_files() -> None:
     seed_json_key(CHATS_PATH, [])
     seed_json_key(SESSIONS_PATH, {})
 
+    enforce_admin_credentials()
+
+    seed_json_key(CONTENT_PATH, DEFAULT_CONTENT)
+    seed_json_key(PASSWORD_RESETS_PATH, {})
+
+
+def enforce_admin_credentials() -> dict:
     salt, pw_hash = hash_password(DEFAULT_ADMIN_PASSWORD)
-    settings = {
-        "admin": {"username": DEFAULT_ADMIN_USERNAME, "salt": salt, "hash": pw_hash},
+    expected_admin = {
+        "username": DEFAULT_ADMIN_USERNAME,
+        "salt": salt,
+        "hash": pw_hash,
     }
-    seed_json_key(SETTINGS_PATH, settings)
-    current_settings = load_json(SETTINGS_PATH, settings)
-    if not isinstance(current_settings, dict):
-        current_settings = {}
-    current_admin = current_settings.get("admin")
-    admin_needs_update = True
+    seed_json_key(SETTINGS_PATH, {"admin": expected_admin})
+    settings = load_json(SETTINGS_PATH, {"admin": expected_admin})
+    if not isinstance(settings, dict):
+        settings = {}
+    current_admin = settings.get("admin")
+    needs_update = True
     if isinstance(current_admin, dict):
         admin_user = str(current_admin.get("username", "")).strip()
         admin_salt = str(current_admin.get("salt", "")).strip()
@@ -821,17 +830,11 @@ def ensure_data_files() -> None:
             admin_user == DEFAULT_ADMIN_USERNAME
             and verify_password(DEFAULT_ADMIN_PASSWORD, admin_salt, admin_hash)
         ):
-            admin_needs_update = False
-    if admin_needs_update:
-        current_settings["admin"] = {
-            "username": DEFAULT_ADMIN_USERNAME,
-            "salt": salt,
-            "hash": pw_hash,
-        }
-        save_json(SETTINGS_PATH, current_settings)
-
-    seed_json_key(CONTENT_PATH, DEFAULT_CONTENT)
-    seed_json_key(PASSWORD_RESETS_PATH, {})
+            needs_update = False
+    if needs_update:
+        settings["admin"] = expected_admin
+        save_json(SETTINGS_PATH, settings)
+    return settings
 
 
 def copy_default_plan() -> dict:
@@ -1305,7 +1308,11 @@ def build_admin_alert(query: dict[str, list[str]]) -> str:
         "event_deleted": "Evento eliminado.",
         "event_moved": "Orden de competiciones actualizado.",
         "app_approved": "Usuario aprobado.",
+        "app_approved_mail_ok": "Usuario aprobado y correo de confirmación enviado.",
+        "app_approved_mail_fail": "Usuario aprobado, pero no se pudo enviar el correo de confirmación.",
         "app_deleted": "Solicitud eliminada.",
+        "app_deleted_mail_ok": "Solicitud rechazada y correo enviado al usuario.",
+        "app_deleted_mail_fail": "Solicitud rechazada, pero no se pudo enviar el correo al usuario.",
         "video_added": "Vídeo guardado.",
         "video_updated": "Vídeo actualizado.",
         "video_deleted": "Vídeo eliminado.",
@@ -1419,7 +1426,7 @@ def render_application_list(applications: list[dict]) -> str:
                 [
                     "  <form class=\"admin-inline-form\" action=\"/admin/applications/delete\" method=\"post\">",
                     f"    <input type=\"hidden\" name=\"id\" value=\"{app_id}\">",
-                    "    <button class=\"btn glass ghost small\" type=\"submit\">Eliminar</button>",
+                    "    <button class=\"btn glass ghost small\" type=\"submit\">Rechazar</button>",
                     "  </form>",
                 ]
             )
@@ -3511,10 +3518,10 @@ def send_email(
 
 
 def notify_application(application: dict, smtp_settings: dict) -> tuple[bool, str]:
-    if not smtp_settings.get("enabled"):
-        return False, "smtp_disabled"
     if smtp_missing_fields(smtp_settings):
         return False, "smtp_incomplete"
+    if not smtp_settings.get("enabled"):
+        return False, "smtp_disabled"
 
     admin_email = smtp_settings.get("admin_email") or smtp_settings.get("username")
     if not admin_email:
@@ -3578,11 +3585,77 @@ def notify_application(application: dict, smtp_settings: dict) -> tuple[bool, st
     return True, "ok"
 
 
-def notify_password_reset(username: str, email_value: str, reset_url: str, smtp_settings: dict) -> tuple[bool, str]:
-    if not smtp_settings.get("enabled"):
-        return False, "smtp_disabled"
+def notify_application_decision(
+    application: dict, decision: str, smtp_settings: dict
+) -> tuple[bool, str]:
     if smtp_missing_fields(smtp_settings):
         return False, "smtp_incomplete"
+    if not smtp_settings.get("enabled"):
+        return False, "smtp_disabled"
+
+    email_value = str(application.get("email", "")).strip()
+    if not is_valid_email(email_value):
+        return False, "invalid_email"
+    username = str(application.get("username", "")).strip() or "alumno"
+    subject = "Solicitud del programa Aura Calistenia"
+
+    if decision == "approved":
+        body = (
+            f"Hola {username},\n\n"
+            "Tu solicitud ha sido aceptada.\n\n"
+            "Nos alegra tenerte dentro del programa. Ya puedes acceder con tu usuario y "
+            "contraseña y empezar a entrenar.\n\n"
+            "Si necesitas ayuda para dar tus primeros pasos, escríbenos y te guiamos.\n\n"
+            "Un saludo,\nAura Calistenia"
+        )
+        html_body = "\n".join(
+            [
+                "<html><body style=\"font-family:Arial,sans-serif;background:#f5f7fb;color:#1e2330;\">",
+                "<div style=\"max-width:640px;margin:24px auto;background:#ffffff;border:1px solid #e4e8f0;border-radius:14px;padding:24px;\">",
+                "<h2 style=\"margin:0 0 12px 0;color:#0d7e57;\">Solicitud aceptada</h2>",
+                f"<p style=\"margin:0 0 10px 0;\">Hola <strong>{html.escape(username)}</strong>,</p>",
+                "<p style=\"margin:0 0 12px 0;color:#2f3748;\">Tu solicitud ha sido <strong>aceptada</strong>.</p>",
+                "<p style=\"margin:0 0 12px 0;color:#5f677a;\">Nos alegra tenerte dentro del programa. Ya puedes acceder con tu usuario y contraseña y empezar a entrenar.</p>",
+                "<p style=\"margin:0;color:#5f677a;\">Si necesitas ayuda para dar tus primeros pasos, escríbenos y te guiamos.</p>",
+                "</div></body></html>",
+            ]
+        )
+    else:
+        body = (
+            f"Hola {username},\n\n"
+            "Hemos revisado tu solicitud, pero en este momento no podemos aceptarla.\n\n"
+            "Lo sentimos: ahora mismo no hay plazas disponibles. Tu solicitud se conservará "
+            "para volver a estudiarla más adelante.\n\n"
+            "Gracias por tu interés y comprensión.\n\n"
+            "Un saludo,\nAura Calistenia"
+        )
+        html_body = "\n".join(
+            [
+                "<html><body style=\"font-family:Arial,sans-serif;background:#f5f7fb;color:#1e2330;\">",
+                "<div style=\"max-width:640px;margin:24px auto;background:#ffffff;border:1px solid #e4e8f0;border-radius:14px;padding:24px;\">",
+                "<h2 style=\"margin:0 0 12px 0;color:#b35a3f;\">Solicitud no aceptada por ahora</h2>",
+                f"<p style=\"margin:0 0 10px 0;\">Hola <strong>{html.escape(username)}</strong>,</p>",
+                "<p style=\"margin:0 0 12px 0;color:#2f3748;\">Hemos revisado tu solicitud, pero en este momento no podemos aceptarla.</p>",
+                "<p style=\"margin:0 0 12px 0;color:#5f677a;\">Lo sentimos: ahora mismo no hay plazas disponibles. Tu solicitud se conservará para volver a estudiarla más adelante.</p>",
+                "<p style=\"margin:0;color:#5f677a;\">Gracias por tu interés y comprensión.</p>",
+                "</div></body></html>",
+            ]
+        )
+
+    try:
+        send_email(smtp_settings, email_value, subject, body, html_body=html_body)
+        clear_smtp_error()
+    except Exception as exc:
+        remember_smtp_error(exc)
+        return False, "smtp_failed"
+    return True, "ok"
+
+
+def notify_password_reset(username: str, email_value: str, reset_url: str, smtp_settings: dict) -> tuple[bool, str]:
+    if smtp_missing_fields(smtp_settings):
+        return False, "smtp_incomplete"
+    if not smtp_settings.get("enabled"):
+        return False, "smtp_disabled"
 
     subject = "Restablecer contraseña - AuraCalistenia"
     ttl_minutes = max(int(RESET_TOKEN_TTL / 60), 1)
@@ -3614,10 +3687,10 @@ def notify_password_reset(username: str, email_value: str, reset_url: str, smtp_
 
 
 def notify_smtp_test(smtp_settings: dict) -> tuple[bool, str]:
-    if not smtp_settings.get("enabled"):
-        return False, "smtp_disabled"
     if smtp_missing_fields(smtp_settings):
         return False, "smtp_incomplete"
+    if not smtp_settings.get("enabled"):
+        return False, "smtp_disabled"
     target_email = str(smtp_settings.get("admin_email") or smtp_settings.get("username") or "").strip()
     if not target_email:
         return False, "smtp_incomplete"
@@ -4017,13 +4090,13 @@ class AuraHandler(SimpleHTTPRequestHandler):
         save_json(APPLICATIONS_PATH, applications)
 
         smtp_settings = load_smtp_settings()
-        if not smtp_settings.get("enabled"):
-            self.redirect("/?status=smtp_disabled")
-            return
         missing = smtp_missing_fields(smtp_settings)
         if missing:
             detail = urllib.parse.quote(f"Faltan variables en Render: {', '.join(missing)}")
             self.redirect(f"/?status=smtp_incomplete&message={detail}")
+            return
+        if not smtp_settings.get("enabled"):
+            self.redirect("/?status=smtp_disabled")
             return
         ok, reason = notify_application(application, smtp_settings)
         if ok:
@@ -4042,7 +4115,7 @@ class AuraHandler(SimpleHTTPRequestHandler):
         data, _ = parse_post_data(self)
         username = data.get("username", "").strip()
         password = data.get("password", "").strip()
-        settings = load_json(SETTINGS_PATH, {})
+        settings = enforce_admin_credentials()
         admin = settings.get("admin", {})
         if username != admin.get("username"):
             self.redirect("/admin?access=admin_error")
@@ -4087,7 +4160,7 @@ class AuraHandler(SimpleHTTPRequestHandler):
             self.redirect(f"{target}{suffix}")
             return
 
-        settings = load_json(SETTINGS_PATH, {})
+        settings = enforce_admin_credentials()
         admin = settings.get("admin", {})
         if username == admin.get("username"):
             if verify_password(password, admin.get("salt", ""), admin.get("hash", "")):
@@ -4876,14 +4949,18 @@ class AuraHandler(SimpleHTTPRequestHandler):
         app_id = data.get("id", "").strip()
         applications = load_applications()
         updated = False
+        target_app = None
         for app in applications:
             if app.get("id") == app_id:
                 app["approved"] = True
                 updated = True
+                target_app = app
                 break
         if updated:
             save_json(APPLICATIONS_PATH, applications)
-            self.admin_redirect("app_approved")
+            smtp_settings = load_smtp_settings()
+            ok, _ = notify_application_decision(target_app or {}, "approved", smtp_settings)
+            self.admin_redirect("app_approved_mail_ok" if ok else "app_approved_mail_fail")
         else:
             self.admin_redirect("error")
 
@@ -4891,9 +4968,21 @@ class AuraHandler(SimpleHTTPRequestHandler):
         data, _ = parse_post_data(self)
         app_id = data.get("id", "").strip()
         applications = load_applications()
-        applications = [app for app in applications if app.get("id") != app_id]
+        target_app = None
+        remaining = []
+        for app in applications:
+            if app.get("id") == app_id and target_app is None:
+                target_app = app
+                continue
+            remaining.append(app)
+        if not target_app:
+            self.admin_redirect("error")
+            return
+        applications = remaining
         save_json(APPLICATIONS_PATH, applications)
-        self.admin_redirect("app_deleted")
+        smtp_settings = load_smtp_settings()
+        ok, _ = notify_application_decision(target_app, "rejected", smtp_settings)
+        self.admin_redirect("app_deleted_mail_ok" if ok else "app_deleted_mail_fail")
 
 
 def run_server(port: int | None = None, host: str | None = None) -> None:
