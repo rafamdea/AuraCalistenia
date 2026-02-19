@@ -907,6 +907,25 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  const trainingWeeks = Array.from(document.querySelectorAll(".training-week"));
+  if (trainingWeeks.length) {
+    const syncWeekToggleLabel = (weekCard) => {
+      const toggle = weekCard.querySelector(".training-week-toggle");
+      if (!toggle) {
+        return;
+      }
+      const openLabel = toggle.dataset.openLabel || "Minimizar";
+      const closedLabel = toggle.dataset.closedLabel || "Maximizar";
+      toggle.textContent = weekCard.open ? openLabel : closedLabel;
+    };
+    trainingWeeks.forEach((weekCard) => {
+      syncWeekToggleLabel(weekCard);
+      weekCard.addEventListener("toggle", () => {
+        syncWeekToggleLabel(weekCard);
+      });
+    });
+  }
+
   const staggerGroups = document.querySelectorAll("[data-stagger]");
   staggerGroups.forEach((group) => {
     const items = group.querySelectorAll(".stagger-item");

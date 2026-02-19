@@ -1,4 +1,4 @@
-# Aura Calistenia Web
+# AuraCalistenia Web
 
 Web con landing pública, panel admin y portal de alumnos.
 
@@ -16,7 +16,7 @@ Web con landing pública, panel admin y portal de alumnos.
   - `AURA_SMTP_PORT` = `587`
   - `AURA_SMTP_TLS` = `true`
   - `AURA_SMTP_SSL` = `false`
-  - `AURA_SMTP_FROM` = nombre visible del remitente (ej: `Aura Calistenia`)
+  - `AURA_SMTP_FROM` = nombre visible del remitente (ej: `AuraCalistenia`)
   - `AURA_SMTP_ADMIN` = correo para notificaciones admin
   - `AURA_SMTP_ENABLED` = `true` (si no la defines, se activa automáticamente si hay host+user+pass)
 

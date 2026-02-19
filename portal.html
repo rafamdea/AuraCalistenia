@@ -3,25 +3,27 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Panel alumno - Aura Calistenia</title>
+    <title>Panel alumno - AuraCalistenia</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/styles.css?v=20260218-8">
+    <link rel="stylesheet" href="/styles.css?v=20260219-1">
   </head>
   <body class="admin-body portal-body">
     <div class="noise" aria-hidden="true"></div>
     <header class="nav">
       <div class="nav-inner">
         <nav class="nav-group nav-left"></nav>
-        <a class="nav-brand" href="/" aria-label="Aura Calistenia">
+        <a class="nav-brand" href="/" aria-label="AuraCalistenia">
           <span class="brand-mark" aria-hidden="true"></span>
         </a>
         <nav class="nav-group nav-right">
           <a href="/">Inicio</a>
+          {{PORTAL_NAV_ACTIONS}}
         </nav>
         <nav class="nav-group nav-compact" aria-label="Navegación">
           <a href="/">Inicio</a>
+          {{PORTAL_NAV_ACTIONS}}
         </nav>
       </div>
     </header>
@@ -37,6 +39,6 @@
         {{PORTAL_CONTENT}}
       </div>
     </main>
-    <script src="/script.js?v=20260218-5"></script>
+    <script src="/script.js?v=20260219-1"></script>
   </body>
 </html>

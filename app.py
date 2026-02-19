@@ -632,7 +632,7 @@ def smtp_defaults_from_env() -> dict:
         "MAIL_FROM_NAME",
         "EMAIL_FROM",
         "FROM_NAME",
-        default="Aura Calistenia",
+        default="AuraCalistenia",
     )
     admin_email, admin_source = env_first_with_source(
         "AURA_SMTP_ADMIN",
@@ -852,7 +852,7 @@ def normalize_smtp_settings(settings: dict | None) -> dict:
     normalized["host"] = str(normalized.get("host", "")).strip()
     normalized["username"] = str(normalized.get("username", "")).strip()
     normalized["password"] = str(normalized.get("password", "")).strip()
-    normalized["from_name"] = str(normalized.get("from_name", "")).strip() or "Aura Calistenia"
+    normalized["from_name"] = str(normalized.get("from_name", "")).strip() or "AuraCalistenia"
     normalized["admin_email"] = str(normalized.get("admin_email", "")).strip()
     return normalized
 
@@ -1786,7 +1786,9 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
             f'          <div class="week-kpi"><span>✓ {week_stats["done"]} ({week_stats["done_pct"]}%)</span><span>✕ {week_stats["missed"]} ({week_stats["missed_pct"]}%)</span><span>⏳ {week_stats["pending"]} ({week_stats["pending_pct"]}%)</span></div>'
         )
         parts.append("        </div>")
-        parts.append('        <span class="training-week-toggle" aria-hidden="true">Minimizar</span>')
+        parts.append(
+            '        <span class="training-week-toggle" data-open-label="Minimizar" data-closed-label="Maximizar" aria-hidden="true">Minimizar</span>'
+        )
         parts.append("      </summary>")
         parts.append('      <div class="training-week-body">')
         parts.append('      <div class="week-chart-row">')
@@ -2068,7 +2070,7 @@ def render_password_reset_page(query: dict[str, list[str]]) -> str:
                 '<div class="admin-login glass-card">',
                 "  <h2>Restablecer contraseña</h2>",
                 f"  {fallback_alert}" if fallback_alert else "",
-                "  <p>Solicita un nuevo enlace desde el acceso de alumnos.</p>",
+                "  <p>Solicita un nuevo enlace desde el acceso a tu Área Privada.</p>",
                 '  <a class="btn glass primary" href="/portal">Ir al portal</a>',
                 "</div>",
             ]
@@ -2081,18 +2083,18 @@ def render_password_reset_page(query: dict[str, list[str]]) -> str:
             "  <head>",
             "    <meta charset=\"utf-8\">",
             "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
-            "    <title>Restablecer contraseña - Aura Calistenia</title>",
+            "    <title>Restablecer contraseña - AuraCalistenia</title>",
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260218-8\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260219-1\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
             "    <header class=\"nav\">",
             "      <div class=\"nav-inner\">",
             "        <nav class=\"nav-group nav-left\"></nav>",
-            "        <a class=\"nav-brand\" href=\"/\" aria-label=\"Aura Calistenia\">",
+            "        <a class=\"nav-brand\" href=\"/\" aria-label=\"AuraCalistenia\">",
             "          <span class=\"brand-mark\" aria-hidden=\"true\"></span>",
             "        </a>",
             "        <nav class=\"nav-group nav-right\">",
@@ -2164,7 +2166,7 @@ def render_access_section(query: dict[str, list[str]], cookie_header: str | None
     login_card = "\n".join(
         [
             '<div class="portal-card glass-card stagger-item">',
-            "  <h3>Acceso único</h3>",
+            "  <h3>Acceso a tu Área Privada</h3>",
             "  <p>Usa tus credenciales de alumno o admin.</p>",
             f"  {alert}" if alert else "",
             "  <form class=\"admin-form\" action=\"/login\" method=\"post\">",
@@ -3054,18 +3056,18 @@ def render_login_page(error: str | None = None) -> str:
             "  <head>",
             "    <meta charset=\"utf-8\">",
             "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
-            "    <title>Acceso admin - Aura Calistenia</title>",
+            "    <title>Acceso admin - AuraCalistenia</title>",
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260218-8\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260219-1\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
             "    <header class=\"nav\">",
             "      <div class=\"nav-inner\">",
             "        <nav class=\"nav-group nav-left\"></nav>",
-            "        <a class=\"nav-brand\" href=\"/\" aria-label=\"Aura Calistenia\">",
+            "        <a class=\"nav-brand\" href=\"/\" aria-label=\"AuraCalistenia\">",
             "          <span class=\"brand-mark\" aria-hidden=\"true\"></span>",
             "        </a>",
             "        <nav class=\"nav-group nav-right\">",
@@ -3110,7 +3112,7 @@ def render_portal_page(query: dict[str, list[str]], cookie_header: str | None) -
         login_card = "\n".join(
             [
                 '<div class="portal-card glass-card stagger-item">',
-                "  <h3>Acceso alumnos</h3>",
+                "  <h3>Acceso a tu Área Privada</h3>",
                 "  <p>Introduce tu usuario y contraseña para ver tu plan.</p>",
                 f"  {user_alert}" if user_alert else "",
                 "  <form class=\"admin-form\" action=\"/login\" method=\"post\">",
@@ -3128,7 +3130,10 @@ def render_portal_page(query: dict[str, list[str]], cookie_header: str | None) -
                 "</div>",
             ]
         )
-        return render_template(PORTAL_TEMPLATE, {"PORTAL_CONTENT": login_card})
+        return render_template(
+            PORTAL_TEMPLATE,
+            {"PORTAL_CONTENT": login_card, "PORTAL_NAV_ACTIONS": ""},
+        )
 
     app = find_application(applications, portal_user) or {}
     week_param = (query.get("week") or [""])[0]
@@ -3152,10 +3157,15 @@ def render_portal_page(query: dict[str, list[str]], cookie_header: str | None) -
             f"    <span>Objetivo: {goal or 'Sin datos'}</span>",
             f"    <span>Nivel: {level or 'Sin datos'}</span>",
             "  </div>",
-            "  <form class=\"portal-actions\" action=\"/logout\" method=\"post\">",
-            "    <button class=\"btn glass ghost\" type=\"submit\">Cerrar sesión</button>",
-            "  </form>",
             "</div>",
+        ]
+    )
+
+    nav_actions = "\n".join(
+        [
+            '<form class="nav-logout-form" action="/logout" method="post">',
+            '  <button class="btn glass ghost nav-logout-btn" type="submit">Cerrar sesión</button>',
+            "</form>",
         ]
     )
 
@@ -3174,7 +3184,10 @@ def render_portal_page(query: dict[str, list[str]], cookie_header: str | None) -
             "</details>",
         ]
     )
-    return render_template(PORTAL_TEMPLATE, {"PORTAL_CONTENT": portal_content})
+    return render_template(
+        PORTAL_TEMPLATE,
+        {"PORTAL_CONTENT": portal_content, "PORTAL_NAV_ACTIONS": nav_actions},
+    )
 
 
 def parse_post_data(handler: SimpleHTTPRequestHandler) -> tuple[dict[str, str], dict[str, UploadedFile]]:
@@ -3300,7 +3313,7 @@ def send_email(
     reply_to: str | None = None,
 ) -> None:
     msg = EmailMessage()
-    from_name = smtp_settings.get("from_name") or "Aura Calistenia"
+    from_name = smtp_settings.get("from_name") or "AuraCalistenia"
     from_email = smtp_settings.get("username") or smtp_settings.get("admin_email") or ""
     msg["From"] = f"{from_name} <{from_email}>" if from_email else from_name
     msg["To"] = to_email
@@ -3390,7 +3403,7 @@ def notify_application(application: dict, smtp_settings: dict) -> tuple[bool, st
         ]
     )
 
-    user_subject = "Solicitud recibida - Aura Calistenia"
+    user_subject = "Solicitud recibida - AuraCalistenia"
     user_body = (
         "Hemos recibido tu solicitud correctamente.\n\n"
         f"Usuario: {username}\n"
@@ -3404,7 +3417,7 @@ def notify_application(application: dict, smtp_settings: dict) -> tuple[bool, st
             "<div style=\"max-width:640px;margin:24px auto;background:#ffffff;border:1px solid #e4e8f0;border-radius:14px;padding:24px;\">",
             "<h2 style=\"margin:0 0 12px 0;color:#b08b4a;\">Solicitud recibida</h2>",
             f"<p style=\"margin:0 0 8px 0;\">Hola <strong>{html.escape(username)}</strong>,</p>",
-            "<p style=\"margin:0 0 14px 0;color:#5f677a;\">Hemos recibido tu solicitud en Aura Calistenia con estos datos:</p>",
+            "<p style=\"margin:0 0 14px 0;color:#5f677a;\">Hemos recibido tu solicitud en AuraCalistenia con estos datos:</p>",
             "<ul style=\"margin:0 0 14px 18px;padding:0;color:#2f3748;\">",
             f"<li>Skill objetivo: {html.escape(skill or 'No indicado')}</li>",
             f"<li>Nivel actual: {html.escape(level or 'No indicado')}</li>",
@@ -3440,7 +3453,7 @@ def notify_password_reset(username: str, email_value: str, reset_url: str, smtp_
     if smtp_missing_fields(smtp_settings):
         return False, "smtp_incomplete"
 
-    subject = "Restablecer contraseña - Aura Calistenia"
+    subject = "Restablecer contraseña - AuraCalistenia"
     ttl_minutes = max(int(RESET_TOKEN_TTL / 60), 1)
     body = (
         "Has solicitado restablecer tu contraseña.\n\n"
@@ -3477,7 +3490,7 @@ def notify_smtp_test(smtp_settings: dict) -> tuple[bool, str]:
     target_email = str(smtp_settings.get("admin_email") or smtp_settings.get("username") or "").strip()
     if not target_email:
         return False, "smtp_incomplete"
-    subject = "Prueba SMTP - Aura Calistenia"
+    subject = "Prueba SMTP - AuraCalistenia"
     body = (
         "Correo de prueba enviado desde el panel admin.\n\n"
         "Si recibes este email, la configuración SMTP funciona correctamente."
@@ -3665,6 +3678,10 @@ class AuraHandler(SimpleHTTPRequestHandler):
 
         if path == "/admin.html":
             self.redirect("/admin")
+            return
+
+        if path == "/portal.html":
+            self.redirect("/portal")
             return
 
         if path == "/legal":
@@ -3922,7 +3939,7 @@ class AuraHandler(SimpleHTTPRequestHandler):
             delete_session(token)
         self.send_response(HTTPStatus.SEE_OTHER)
         self.send_header("Set-Cookie", f"{ADMIN_SESSION_COOKIE}=deleted; Path=/; Max-Age=0")
-        self.send_header("Location", "/admin?access=admin_logout")
+        self.send_header("Location", "/portal")
         self.end_headers()
 
     def handle_login(self) -> None:

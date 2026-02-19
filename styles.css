@@ -248,6 +248,22 @@ h3 {
   transition: background 0.3s ease, color 0.3s ease;
 }
 
+.nav-logout-form {
+  margin: 0;
+  display: inline-flex;
+}
+
+.nav-logout-btn {
+  padding: 12px 22px;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+}
+
+.nav-compact .nav-logout-btn {
+  padding: 10px 16px;
+  font-size: 0.62rem;
+}
+
 .nav-group a:hover {
   background: rgba(255, 255, 255, 0.08);
   color: var(--green-300);
@@ -1304,7 +1320,6 @@ h3 {
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.06);
 }
- fusta
 .chat-message.is-own {
   border-color: rgba(74, 241, 173, 0.35);
   background: rgba(74, 241, 173, 0.12);
@@ -1685,6 +1700,26 @@ h3 {
 }
 
 .video-arena::-webkit-scrollbar-thumb {
+  background: rgba(74, 241, 173, 0.35);
+  border-radius: 999px;
+}
+
+.progression-grid::-webkit-scrollbar,
+.day-grid::-webkit-scrollbar,
+.portal-items-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.progression-grid::-webkit-scrollbar-track,
+.day-grid::-webkit-scrollbar-track,
+.portal-items-row::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+}
+
+.progression-grid::-webkit-scrollbar-thumb,
+.day-grid::-webkit-scrollbar-thumb,
+.portal-items-row::-webkit-scrollbar-thumb {
   background: rgba(74, 241, 173, 0.35);
   border-radius: 999px;
 }
@@ -2686,8 +2721,57 @@ h3 {
     padding-right: 20vw;
   }
 
+  .progression-grid {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(240px, 72vw);
+    grid-template-columns: none;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 2px;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .progression-card {
+    scroll-snap-align: start;
+    min-width: 0;
+  }
+
+  .day-grid {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(240px, 78vw);
+    grid-template-columns: none;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 2px;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .day-card {
+    scroll-snap-align: start;
+    min-width: 0;
+  }
+
   .portal-items-row {
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(260px, 74vw);
+    grid-template-columns: none;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 2px;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .portal-items-row .portal-item {
+    scroll-snap-align: start;
   }
 
   .training-week-summary {
@@ -2806,13 +2890,24 @@ h3 {
     height: 180px;
   }
 
+  .progression-grid {
+    grid-auto-columns: 84vw;
+    padding-right: 10vw;
+  }
+
   .video-arena {
     grid-auto-columns: 78vw;
     padding-right: 16vw;
   }
 
+  .day-grid {
+    grid-auto-columns: 86vw;
+    padding-right: 10vw;
+  }
+
   .portal-items-row {
-    grid-template-columns: 1fr;
+    grid-auto-columns: 86vw;
+    padding-right: 10vw;
   }
 
   .training-week-summary {
