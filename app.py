@@ -91,10 +91,19 @@ def resolve_database_url() -> tuple[str, str]:
     return "", ""
 
 
+def normalize_env_literal(raw_value: str | None) -> str:
+    value = str(raw_value or "").strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1].strip()
+    return value
+
+
 DATABASE_URL, DATABASE_URL_SOURCE = resolve_database_url()
 DB_TABLE = os.environ.get("AURA_DB_TABLE", "aura_state").strip() or "aura_state"
 if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", DB_TABLE):
     DB_TABLE = "aura_state"
+DEFAULT_ADMIN_USERNAME = normalize_env_literal(os.environ.get("AURA_ADMIN_USER")) or "rmonale"
+DEFAULT_ADMIN_PASSWORD = normalize_env_literal(os.environ.get("AURA_ADMIN_PASS")) or "Adminaura123!"
 DAY_LABELS = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
 DB_LAST_ERROR = ""
 SMTP_LAST_ERROR = ""
@@ -794,11 +803,32 @@ def ensure_data_files() -> None:
     seed_json_key(CHATS_PATH, [])
     seed_json_key(SESSIONS_PATH, {})
 
-    salt, pw_hash = hash_password("admin")
+    salt, pw_hash = hash_password(DEFAULT_ADMIN_PASSWORD)
     settings = {
-        "admin": {"username": "admin", "salt": salt, "hash": pw_hash},
+        "admin": {"username": DEFAULT_ADMIN_USERNAME, "salt": salt, "hash": pw_hash},
     }
     seed_json_key(SETTINGS_PATH, settings)
+    current_settings = load_json(SETTINGS_PATH, settings)
+    if not isinstance(current_settings, dict):
+        current_settings = {}
+    current_admin = current_settings.get("admin")
+    admin_needs_update = True
+    if isinstance(current_admin, dict):
+        admin_user = str(current_admin.get("username", "")).strip()
+        admin_salt = str(current_admin.get("salt", "")).strip()
+        admin_hash = str(current_admin.get("hash", "")).strip()
+        if (
+            admin_user == DEFAULT_ADMIN_USERNAME
+            and verify_password(DEFAULT_ADMIN_PASSWORD, admin_salt, admin_hash)
+        ):
+            admin_needs_update = False
+    if admin_needs_update:
+        current_settings["admin"] = {
+            "username": DEFAULT_ADMIN_USERNAME,
+            "salt": salt,
+            "hash": pw_hash,
+        }
+        save_json(SETTINGS_PATH, current_settings)
 
     seed_json_key(CONTENT_PATH, DEFAULT_CONTENT)
     seed_json_key(PASSWORD_RESETS_PATH, {})
@@ -1246,16 +1276,16 @@ def build_form_alert(query: dict[str, list[str]]) -> str:
     if not status:
         return ""
     if status == "ok":
-        text = "Solicitud recibida. Revisa tu email para confirmar el acceso."
+        text = "Solicitud recibida. La revisaremos y te contactaremos pronto."
         level = "success"
     elif status == "smtp_disabled":
-        text = "Solicitud guardada, pero el envío de correo está desactivado (AURA_SMTP_ENABLED)."
+        text = "Solicitud guardada. El envío automático de correos está desactivado temporalmente."
         level = "error"
     elif status == "smtp_incomplete":
-        text = message or "Falta configurar variables SMTP en Render."
+        text = "Solicitud guardada. Falta completar la configuración de correo."
         level = "error"
     elif status == "smtp_error":
-        text = "No se pudo enviar el correo (error SMTP). Revisa host, puerto, TLS/SSL y contraseña de aplicación."
+        text = "Solicitud guardada, pero no se pudo enviar el correo automático en este momento."
         level = "error"
     else:
         text = message or "No se pudo enviar la solicitud."
@@ -1311,18 +1341,18 @@ def build_access_alert(status: str, role: str) -> str:
         "user_submit_error": ("error", "No se pudo enviar el vídeo."),
         "user_reset_missing": ("error", "Completa usuario y email para recuperar tu acceso."),
         "user_reset_sent": ("success", "Si los datos coinciden, te hemos enviado un enlace de restablecimiento."),
-        "user_reset_smtp": ("error", "No se pudo enviar el email de recuperación. Revisa SMTP en Render."),
+        "user_reset_smtp": ("error", "No se pudo enviar el email de recuperación en este momento."),
         "user_reset_smtp_disabled": (
             "error",
-            "No se pudo enviar el email: el envío SMTP está desactivado (AURA_SMTP_ENABLED).",
+            "No se pudo enviar el email: el envío automático está desactivado temporalmente.",
         ),
         "user_reset_smtp_incomplete": (
             "error",
-            "No se pudo enviar el email: faltan variables SMTP (HOST/USER/PASS) en Render.",
+            "No se pudo enviar el email: la configuración de correo no está completa.",
         ),
         "user_reset_smtp_failed": (
             "error",
-            "No se pudo enviar el email de recuperación por error SMTP. Revisa host, puerto, TLS/SSL y contraseña.",
+            "No se pudo enviar el email de recuperación por un error temporal de correo.",
         ),
         "user_reset_invalid": ("error", "El enlace de recuperación no es válido o ha caducado."),
         "user_reset_mismatch": ("error", "Las contraseñas no coinciden o están vacías."),
@@ -3531,31 +3561,6 @@ def notify_application(application: dict, smtp_settings: dict) -> tuple[bool, st
         ]
     )
 
-    user_subject = "Solicitud recibida - AuraCalistenia"
-    user_body = (
-        "Hemos recibido tu solicitud correctamente.\n\n"
-        f"Usuario: {username}\n"
-        f"Skill objetivo: {skill or 'No indicado'}\n"
-        f"Objetivo: {goal or 'No indicado'}\n\n"
-        "En breve revisaremos tus datos y te responderemos por email."
-    )
-    user_html = "\n".join(
-        [
-            "<html><body style=\"font-family:Arial,sans-serif;background:#f5f7fb;color:#1e2330;\">",
-            "<div style=\"max-width:640px;margin:24px auto;background:#ffffff;border:1px solid #e4e8f0;border-radius:14px;padding:24px;\">",
-            "<h2 style=\"margin:0 0 12px 0;color:#b08b4a;\">Solicitud recibida</h2>",
-            f"<p style=\"margin:0 0 8px 0;\">Hola <strong>{html.escape(username)}</strong>,</p>",
-            "<p style=\"margin:0 0 14px 0;color:#5f677a;\">Hemos recibido tu solicitud en AuraCalistenia con estos datos:</p>",
-            "<ul style=\"margin:0 0 14px 18px;padding:0;color:#2f3748;\">",
-            f"<li>Skill objetivo: {html.escape(skill or 'No indicado')}</li>",
-            f"<li>Nivel actual: {html.escape(level or 'No indicado')}</li>",
-            f"<li>Objetivo: {html.escape(goal or 'No indicado')}</li>",
-            "</ul>",
-            "<p style=\"margin:0;color:#5f677a;\">Te responderemos a este correo cuando revisemos tu alta.</p>",
-            "</div></body></html>",
-        ]
-    )
-
     try:
         send_email(
             smtp_settings,
@@ -3565,8 +3570,6 @@ def notify_application(application: dict, smtp_settings: dict) -> tuple[bool, st
             html_body=admin_html,
             reply_to=reply_to_email,
         )
-        if email_value and is_valid_email(email_value):
-            send_email(smtp_settings, email_value, user_subject, user_body, html_body=user_html)
         clear_smtp_error()
     except Exception as exc:
         remember_smtp_error(exc)

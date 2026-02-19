@@ -228,6 +228,30 @@ document.addEventListener("DOMContentLoaded", () => {
     allVideos.forEach((video) => videoObserver.observe(video));
   }
 
+  const horizontalTracks = Array.from(
+    document.querySelectorAll(".video-arena, .progression-grid, .day-grid, .portal-items-row")
+  );
+  horizontalTracks.forEach((track) => {
+    track.addEventListener(
+      "wheel",
+      (event) => {
+        if (event.ctrlKey) {
+          return;
+        }
+        if (track.scrollWidth <= track.clientWidth + 2) {
+          return;
+        }
+        const mostlyVertical = Math.abs(event.deltaY) > Math.abs(event.deltaX);
+        if (!mostlyVertical || Math.abs(event.deltaY) < 1) {
+          return;
+        }
+        event.preventDefault();
+        track.scrollLeft += event.deltaY;
+      },
+      { passive: false }
+    );
+  });
+
   const planEditor = document.querySelector(".plan-editor");
   if (planEditor) {
     const planDataEl = document.getElementById("plan-data");

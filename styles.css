@@ -498,6 +498,7 @@ h3 {
 
 .program {
   background: linear-gradient(160deg, rgba(6, 18, 13, 0.95), rgba(3, 7, 5, 0.98));
+  overflow: visible;
 }
 
 .program::before {
