@@ -109,11 +109,22 @@ DB_LAST_ERROR = ""
 SMTP_LAST_ERROR = ""
 JSON_CACHE_LOCK = threading.Lock()
 JSON_CACHE: dict[str, tuple[float, object]] = {}
+STORAGE_STATUS_CACHE_LOCK = threading.Lock()
+STORAGE_STATUS_CACHE: tuple[float, dict] | None = None
+BACKGROUND_TASKS_LOCK = threading.Lock()
+BACKGROUND_TASKS: set[threading.Thread] = set()
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 try:
-    JSON_CACHE_TTL_SECONDS = max(float(os.environ.get("AURA_CACHE_TTL_SECONDS", "5")), 0.0)
+    JSON_CACHE_TTL_SECONDS = max(float(os.environ.get("AURA_CACHE_TTL_SECONDS", "15")), 0.0)
 except ValueError:
-    JSON_CACHE_TTL_SECONDS = 5.0
+    JSON_CACHE_TTL_SECONDS = 15.0
+try:
+    STORAGE_STATUS_CACHE_TTL_SECONDS = max(
+        float(os.environ.get("AURA_STORAGE_STATUS_TTL_SECONDS", "30")),
+        0.0,
+    )
+except ValueError:
+    STORAGE_STATUS_CACHE_TTL_SECONDS = 30.0
 
 
 @dataclass
@@ -382,6 +393,27 @@ def clear_smtp_error() -> None:
     SMTP_LAST_ERROR = ""
 
 
+def run_background_task(func, *args, **kwargs) -> None:
+    thread_ref: dict[str, threading.Thread] = {}
+
+    def worker() -> None:
+        try:
+            func(*args, **kwargs)
+        except Exception as exc:
+            remember_smtp_error(exc)
+        finally:
+            with BACKGROUND_TASKS_LOCK:
+                thread = thread_ref.get("thread")
+                if thread is not None:
+                    BACKGROUND_TASKS.discard(thread)
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread_ref["thread"] = thread
+    with BACKGROUND_TASKS_LOCK:
+        BACKGROUND_TASKS.add(thread)
+    thread.start()
+
+
 def clone_json_data(data):
     return copy.deepcopy(data)
 
@@ -435,33 +467,46 @@ def db_key_for_path(path: Path) -> str:
 
 
 def get_storage_status() -> dict:
+    global STORAGE_STATUS_CACHE
     if not db_enabled():
         return {
             "mode": "local",
             "title": "Modo temporal (JSON local)",
             "detail": "Este modo se borra al redeploy. Configura DATABASE_URL (o NEON_DATABASE_URL) en Render para guardar de forma persistente.",
         }
+
+    if STORAGE_STATUS_CACHE_TTL_SECONDS > 0:
+        now = time.monotonic()
+        with STORAGE_STATUS_CACHE_LOCK:
+            cached = STORAGE_STATUS_CACHE
+        if cached and now - cached[0] <= STORAGE_STATUS_CACHE_TTL_SECONDS:
+            return clone_json_data(cached[1])
+
     try:
         with db_connect() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"SELECT count(*) FROM {DB_TABLE}")
-                row = cur.fetchone()
-        count = int(row[0]) if row else 0
+                cur.execute("SELECT 1")
+                cur.fetchone()
         global DB_LAST_ERROR
         DB_LAST_ERROR = ""
-        return {
+        status = {
             "mode": "db_ok",
             "title": "Neon conectado",
-            "detail": f"Guardado persistente activo ({DATABASE_URL_SOURCE or 'DATABASE_URL'}). Registros: {count}.",
+            "detail": f"Guardado persistente activo ({DATABASE_URL_SOURCE or 'DATABASE_URL'}).",
         }
     except Exception as exc:
         remember_db_error(exc)
-        return {
+        status = {
             "mode": "db_error",
             "title": "Error conectando con Neon",
             "detail": f"No se puede usar {DATABASE_URL_SOURCE or 'DATABASE_URL'} ahora mismo. Se usa JSON local temporal.",
             "debug": f"{type(exc).__name__}: {exc}",
         }
+
+    if STORAGE_STATUS_CACHE_TTL_SECONDS > 0:
+        with STORAGE_STATUS_CACHE_LOCK:
+            STORAGE_STATUS_CACHE = (time.monotonic(), clone_json_data(status))
+    return status
 
 
 def db_bootstrap() -> None:
@@ -1308,9 +1353,11 @@ def build_admin_alert(query: dict[str, list[str]]) -> str:
         "event_deleted": "Evento eliminado.",
         "event_moved": "Orden de competiciones actualizado.",
         "app_approved": "Usuario aprobado.",
+        "app_approved_mail_queued": "Usuario aprobado. Enviando correo de confirmación en segundo plano.",
         "app_approved_mail_ok": "Usuario aprobado y correo de confirmación enviado.",
         "app_approved_mail_fail": "Usuario aprobado, pero no se pudo enviar el correo de confirmación.",
         "app_deleted": "Solicitud eliminada.",
+        "app_deleted_mail_queued": "Solicitud rechazada. Enviando correo al usuario en segundo plano.",
         "app_deleted_mail_ok": "Solicitud rechazada y correo enviado al usuario.",
         "app_deleted_mail_fail": "Solicitud rechazada, pero no se pudo enviar el correo al usuario.",
         "video_added": "Vídeo guardado.",
@@ -2243,7 +2290,7 @@ def render_access_section(query: dict[str, list[str]], cookie_header: str | None
                 '    <div class="portal-actions">',
                 '      <a class="btn glass primary" href="/admin">Ir al panel admin</a>',
                 '      <form class="portal-actions" action="/admin/logout" method="post">',
-                '        <button class="btn glass ghost" type="submit">Cerrar sesión</button>',
+                '        <button class="btn nav-logout-btn" type="submit">Cerrar sesión</button>',
                 "      </form>",
                 "    </div>",
                 "  </div>",
@@ -2262,7 +2309,7 @@ def render_access_section(query: dict[str, list[str]], cookie_header: str | None
                 '    <div class="portal-actions">',
                 '      <a class="btn glass primary" href="/portal">Ver mi plan</a>',
                 '      <form class="portal-actions" action="/logout" method="post">',
-                '        <button class="btn glass ghost" type="submit">Cerrar sesión</button>',
+                '        <button class="btn nav-logout-btn" type="submit">Cerrar sesión</button>',
                 "      </form>",
                 "    </div>",
                 "  </div>",
@@ -3277,7 +3324,7 @@ def render_portal_page(query: dict[str, list[str]], cookie_header: str | None) -
     nav_actions = "\n".join(
         [
             '<form class="nav-logout-form" action="/logout" method="post">',
-            '  <button class="btn glass ghost nav-logout-btn" type="submit">Cerrar sesión</button>',
+            '  <button class="btn nav-logout-btn" type="submit">Cerrar sesión</button>',
             "</form>",
         ]
     )
@@ -3649,6 +3696,27 @@ def notify_application_decision(
         remember_smtp_error(exc)
         return False, "smtp_failed"
     return True, "ok"
+
+
+def notify_application_decision_async(
+    application: dict,
+    decision: str,
+    smtp_settings: dict | None = None,
+) -> bool:
+    settings = normalize_smtp_settings(smtp_settings) if isinstance(smtp_settings, dict) else load_smtp_settings()
+    if smtp_missing_fields(settings):
+        return False
+    if not settings.get("enabled"):
+        return False
+
+    payload = clone_json_data(application if isinstance(application, dict) else {})
+    settings_payload = clone_json_data(settings)
+
+    def worker() -> None:
+        notify_application_decision(payload, decision, settings_payload)
+
+    run_background_task(worker)
+    return True
 
 
 def notify_password_reset(username: str, email_value: str, reset_url: str, smtp_settings: dict) -> tuple[bool, str]:
@@ -4959,8 +5027,8 @@ class AuraHandler(SimpleHTTPRequestHandler):
         if updated:
             save_json(APPLICATIONS_PATH, applications)
             smtp_settings = load_smtp_settings()
-            ok, _ = notify_application_decision(target_app or {}, "approved", smtp_settings)
-            self.admin_redirect("app_approved_mail_ok" if ok else "app_approved_mail_fail")
+            queued = notify_application_decision_async(target_app or {}, "approved", smtp_settings)
+            self.admin_redirect("app_approved_mail_queued" if queued else "app_approved_mail_fail")
         else:
             self.admin_redirect("error")
 
@@ -4981,8 +5049,8 @@ class AuraHandler(SimpleHTTPRequestHandler):
         applications = remaining
         save_json(APPLICATIONS_PATH, applications)
         smtp_settings = load_smtp_settings()
-        ok, _ = notify_application_decision(target_app, "rejected", smtp_settings)
-        self.admin_redirect("app_deleted_mail_ok" if ok else "app_deleted_mail_fail")
+        queued = notify_application_decision_async(target_app, "rejected", smtp_settings)
+        self.admin_redirect("app_deleted_mail_queued" if queued else "app_deleted_mail_fail")
 
 
 def run_server(port: int | None = None, host: str | None = None) -> None:

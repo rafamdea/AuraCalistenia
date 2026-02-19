@@ -252,6 +252,78 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   });
 
+  const dragTracks = Array.from(document.querySelectorAll(".video-arena, .progression-grid"));
+  dragTracks.forEach((track) => {
+    let pointerDown = false;
+    let startX = 0;
+    let startLeft = 0;
+    let moved = false;
+
+    track.addEventListener("pointerdown", (event) => {
+      if (event.pointerType !== "mouse" || event.button !== 0) {
+        return;
+      }
+      if (track.scrollWidth <= track.clientWidth + 2) {
+        return;
+      }
+      pointerDown = true;
+      moved = false;
+      startX = event.clientX;
+      startLeft = track.scrollLeft;
+      track.style.scrollBehavior = "auto";
+      track.setPointerCapture(event.pointerId);
+    });
+
+    track.addEventListener("pointermove", (event) => {
+      if (!pointerDown) {
+        return;
+      }
+      const delta = event.clientX - startX;
+      if (Math.abs(delta) > 2) {
+        moved = true;
+      }
+      track.scrollLeft = startLeft - delta;
+    });
+
+    const stopDrag = (event) => {
+      if (!pointerDown) {
+        return;
+      }
+      pointerDown = false;
+      track.style.scrollBehavior = "";
+      if (event && typeof event.pointerId === "number") {
+        try {
+          track.releasePointerCapture(event.pointerId);
+        } catch (error) {
+          // Ignore browsers that already released the pointer capture.
+        }
+      }
+      setTimeout(() => {
+        moved = false;
+      }, 0);
+    };
+
+    track.addEventListener("pointerup", stopDrag);
+    track.addEventListener("pointercancel", stopDrag);
+    track.addEventListener("pointerleave", (event) => {
+      if (event.pointerType === "mouse") {
+        stopDrag(event);
+      }
+    });
+
+    track.addEventListener(
+      "click",
+      (event) => {
+        if (!moved) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+      },
+      true
+    );
+  });
+
   const planEditor = document.querySelector(".plan-editor");
   if (planEditor) {
     const planDataEl = document.getElementById("plan-data");
