@@ -102,6 +102,7 @@ def normalize_env_literal(raw_value: str | None) -> str:
 
 
 DATABASE_URL, DATABASE_URL_SOURCE = resolve_database_url()
+MEDIA_BASE_URL = normalize_env_literal(os.environ.get("AURA_MEDIA_BASE_URL", "")).rstrip("/")
 DB_TABLE = os.environ.get("AURA_DB_TABLE", "aura_state").strip() or "aura_state"
 if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", DB_TABLE):
     DB_TABLE = "aura_state"
@@ -2605,7 +2606,7 @@ def render_video_media(video: dict) -> str:
         )
     if video_url:
         ext = Path(video_url).suffix.lower()
-        src = html.escape(video_url)
+        src = html.escape(resolve_public_media_url(video_url))
         if ext in ALLOWED_IMAGE_EXT:
             return (
                 f'<img src="{src}" alt="{html.escape(video.get("title", ""))}" '
@@ -2625,10 +2626,11 @@ def render_video_cards(videos: list[dict]) -> str:
             layout_class = f" {layout}"
         media_html = render_video_media(video)
         video_url = video.get("video_url") or ""
+        public_video_url = resolve_public_media_url(video_url)
         link_html = ""
-        if video_url:
+        if public_video_url:
             link_html = (
-                f'<a class="video-link glass-pill" href="{html.escape(video_url)}" '
+                f'<a class="video-link glass-pill" href="{html.escape(public_video_url)}" '
                 f'target="_blank" rel="noopener">Ver clip</a>'
             )
         parts.append(
@@ -2890,6 +2892,17 @@ def render_bullets(items: list[str]) -> str:
     return "\n".join([f"<li>{html.escape(text)}</li>" for text in items if str(text).strip()])
 
 
+def resolve_public_media_url(raw_url: str) -> str:
+    value = str(raw_url or "").strip()
+    if not value:
+        return ""
+    if value.startswith(("/", "http://", "https://", "//", "data:", "blob:")):
+        return value
+    if not MEDIA_BASE_URL:
+        return value
+    return f"{MEDIA_BASE_URL}/{value.lstrip('/')}"
+
+
 def render_sponsors(sponsors: list[dict]) -> str:
     cards = []
     for sponsor in sponsors:
@@ -2953,6 +2966,7 @@ def render_index(query: dict[str, list[str]], cookie_header: str | None) -> str:
         "VIDEOS": render_video_cards(videos),
         "FORM_ALERT": build_form_alert(query),
         "ACCESS_CONTENT": render_access_section(query, cookie_header),
+        "MEDIA_BASE_URL": html.escape(MEDIA_BASE_URL),
         "HERO_EYEBROW": html.escape(hero.get("eyebrow", "")),
         "HERO_TITLE": html.escape(hero.get("title", "")),
         "HERO_SUBTITLE": html.escape(hero.get("subtitle", "")),

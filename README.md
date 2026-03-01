@@ -8,6 +8,11 @@ Web con landing pública, panel admin y portal de alumnos.
 - `DATABASE_URL` = URL de conexión PostgreSQL de Neon.
 - `AURA_REQUIRE_DB` = `true` para modo estricto (si Neon falla o falta, la app no guarda en JSON local).
 
+### Media/CDN (opcional)
+- `AURA_MEDIA_BASE_URL` = base pública para servir vídeos externos manteniendo las rutas actuales.
+- Ejemplo: si subes `FOTOS/back-lever.mp4` a `https://cdn.tudominio.com/FOTOS/back-lever.mp4`, define `AURA_MEDIA_BASE_URL=https://cdn.tudominio.com`.
+- Afecta a los vídeos públicos configurados con rutas relativas como `FOTOS/...` o `progresion-pino/...`.
+
 ### SMTP (correos de registro y recuperación)
 - Mínimas (Gmail):
   - `AURA_SMTP_USER` = tu correo Gmail completo

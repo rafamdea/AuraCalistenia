@@ -685,7 +685,6 @@ h3 {
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  cursor: grab;
 }
 
 .progression-card {
@@ -702,10 +701,6 @@ h3 {
   object-fit: cover;
   border: 1px solid rgba(74, 241, 173, 0.2);
   display: block;
-}
-
-.progression-grid:active {
-  cursor: grabbing;
 }
 
 .progression-media {
@@ -873,6 +868,23 @@ h3 {
 
 .video-arena::before {
   content: none;
+}
+
+.video-arena.is-scrollable-track,
+.progression-grid.is-scrollable-track {
+  background-repeat: no-repeat;
+  background-position: right center;
+  background-size: 46px 100%;
+}
+
+.video-arena.is-scrollable-track.can-scroll-right,
+.progression-grid.is-scrollable-track.can-scroll-right {
+  background-image: linear-gradient(270deg, rgba(74, 241, 173, 0.2), rgba(74, 241, 173, 0));
+}
+
+.video-arena.is-scrollable-track.can-scroll-left,
+.progression-grid.is-scrollable-track.can-scroll-left {
+  box-shadow: inset 16px 0 14px -14px rgba(74, 241, 173, 0.22);
 }
 
 .video-card {
@@ -1381,6 +1393,11 @@ h3 {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(233, 248, 239, 0.84);
+}
+
+.public-scroll-hint {
+  display: inline-flex;
+  margin: 0 0 12px;
 }
 
 .horizontal-drag-hint::before {
@@ -2915,12 +2932,7 @@ h3 {
 }
 
 .perf-lite .sponsor-track {
-  animation: none;
-  transform: translateX(0);
-}
-
-.perf-lite .sponsor-loop[aria-hidden="true"] {
-  display: none;
+  animation-duration: 34s;
 }
 
 @keyframes float {

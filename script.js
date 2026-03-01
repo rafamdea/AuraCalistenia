@@ -126,6 +126,29 @@ document.addEventListener("DOMContentLoaded", () => {
   const prefersReducedMotion =
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const rawMediaBaseUrl =
+    ((document.body && document.body.dataset && document.body.dataset.mediaBaseUrl) || "").trim();
+  const mediaBaseUrl =
+    rawMediaBaseUrl && !rawMediaBaseUrl.includes("{{")
+      ? rawMediaBaseUrl.replace(/\/+$/, "")
+      : "";
+
+  const resolveMediaUrl = (rawUrl) => {
+    const value = String(rawUrl || "").trim();
+    if (
+      !value ||
+      !mediaBaseUrl ||
+      value.startsWith("/") ||
+      value.startsWith("http://") ||
+      value.startsWith("https://") ||
+      value.startsWith("//") ||
+      value.startsWith("data:") ||
+      value.startsWith("blob:")
+    ) {
+      return value;
+    }
+    return `${mediaBaseUrl}/${value.replace(/^\.?\//, "")}`;
+  };
 
   const initScrollDownCue = () => {
     if (!document.body || document.querySelector(".scroll-down-cue")) {
@@ -224,25 +247,29 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const syncHorizontalDragHints = () => {
-    document.querySelectorAll(".day-grid, .portal-items-row").forEach((track) => {
-      updateHorizontalTrackState(track);
-    });
+    document
+      .querySelectorAll(".video-arena, .progression-grid, .day-grid, .portal-items-row")
+      .forEach((track) => {
+        updateHorizontalTrackState(track);
+      });
   };
 
   const bindHorizontalTrackHintEvents = () => {
-    document.querySelectorAll(".day-grid, .portal-items-row").forEach((track) => {
-      if (track.dataset.hintBound === "1") {
-        return;
-      }
-      track.dataset.hintBound = "1";
-      track.addEventListener(
-        "scroll",
-        () => {
-          updateHorizontalTrackState(track);
-        },
-        { passive: true }
-      );
-    });
+    document
+      .querySelectorAll(".video-arena, .progression-grid, .day-grid, .portal-items-row")
+      .forEach((track) => {
+        if (track.dataset.hintBound === "1") {
+          return;
+        }
+        track.dataset.hintBound = "1";
+        track.addEventListener(
+          "scroll",
+          () => {
+            updateHorizontalTrackState(track);
+          },
+          { passive: true }
+        );
+      });
   };
 
   const ensureVideoSource = (video) => {
@@ -254,7 +281,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!lazySrc.trim()) {
       return false;
     }
-    video.setAttribute("src", lazySrc.trim());
+    video.setAttribute("src", resolveMediaUrl(lazySrc));
     video.load();
     return true;
   };
@@ -321,29 +348,75 @@ document.addEventListener("DOMContentLoaded", () => {
     lockMute(video);
     setupLoopIndicator(video);
     video.dataset.inViewport = "false";
+    video.dataset.isVisible = "false";
+    video.dataset.visibilityRatio = "0";
     pauseVideo(video);
   });
+
+  const getVideoConcurrencyLimit = () => {
+    if (lowPerfDevice || window.innerWidth < 768) {
+      return 1;
+    }
+    return 2;
+  };
+
+  const getVideoPriority = (video) => {
+    const rect = video.getBoundingClientRect();
+    const viewportCenter = window.innerHeight / 2;
+    const videoCenter = rect.top + rect.height / 2;
+    const distancePenalty = Math.abs(videoCenter - viewportCenter);
+    const visibilityBoost = Number(video.dataset.visibilityRatio || 0) * 10000;
+    return visibilityBoost - distancePenalty;
+  };
+
+  const syncVideoPlayback = () => {
+    if (prefersReducedMotion || !allVideos.length) {
+      return;
+    }
+    const limit = getVideoConcurrencyLimit();
+    const visibleVideos = allVideos
+      .filter((video) => video.dataset.isVisible === "true")
+      .sort((left, right) => getVideoPriority(right) - getVideoPriority(left));
+    const allowedVideos = new Set(visibleVideos.slice(0, limit));
+
+    allVideos.forEach((video) => {
+      if (allowedVideos.has(video)) {
+        video.dataset.inViewport = "true";
+        safePlayVideo(video);
+        return;
+      }
+      pauseVideo(video);
+    });
+  };
 
   if (!prefersReducedMotion && allVideos.length) {
     const videoObserver = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           const video = entry.target;
-          const isVisible = entry.isIntersecting;
-          if (isVisible) {
-            video.dataset.inViewport = "true";
-            safePlayVideo(video);
-          } else if (video.dataset.inViewport === "true") {
+          const isVisible = entry.isIntersecting && entry.intersectionRatio >= 0.25;
+          video.dataset.isVisible = isVisible ? "true" : "false";
+          video.dataset.visibilityRatio = isVisible ? String(entry.intersectionRatio || 0) : "0";
+          if (!isVisible) {
             pauseVideo(video);
           }
         });
+        syncVideoPlayback();
       },
       {
-        threshold: 0.1,
-        rootMargin: "200px 0px 200px 0px",
+        threshold: [0, 0.25, 0.5, 0.75],
+        rootMargin: "80px 0px 80px 0px",
       }
     );
     allVideos.forEach((video) => videoObserver.observe(video));
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        allVideos.forEach((video) => pauseVideo(video));
+        return;
+      }
+      syncVideoPlayback();
+    });
+    window.addEventListener("resize", syncVideoPlayback);
   }
 
   initScrollDownCue();
@@ -364,11 +437,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (track.scrollWidth <= track.clientWidth + 2) {
           return;
         }
-        const horizontalIntent = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY);
-        if (!horizontalIntent) {
-          return;
-        }
-        const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+        const horizontalDelta = Math.abs(event.deltaX);
+        const verticalDelta = Math.abs(event.deltaY);
+        const delta =
+          event.shiftKey || horizontalDelta > verticalDelta
+            ? event.deltaX || event.deltaY
+            : event.deltaY;
         if (Math.abs(delta) < 1) {
           return;
         }
