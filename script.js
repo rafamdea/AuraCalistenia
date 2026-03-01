@@ -265,6 +265,10 @@ document.addEventListener("DOMContentLoaded", () => {
         track.addEventListener(
           "scroll",
           () => {
+            const trackState = trackScrollState.get(track);
+            if (trackState && !trackState.rafId) {
+              trackState.target = track.scrollLeft;
+            }
             updateHorizontalTrackState(track);
           },
           { passive: true }
@@ -398,10 +402,53 @@ document.addEventListener("DOMContentLoaded", () => {
       pauseVideo(video);
     });
   };
+  let videoPlaybackSyncRaf = 0;
+  const scheduleVideoPlaybackSync = () => {
+    if (videoPlaybackSyncRaf) {
+      return;
+    }
+    videoPlaybackSyncRaf = window.requestAnimationFrame(() => {
+      videoPlaybackSyncRaf = 0;
+      syncVideoPlayback();
+    });
+  };
 
   const primeFeaturedVideos = () => {
-    featuredVideos.forEach((video) => {
-      ensureVideoSource(video);
+    const batchSize = window.innerWidth >= 901 ? 3 : featuredVideos.length || 1;
+    featuredVideos.forEach((video, index) => {
+      const delay = Math.floor(index / batchSize) * 120;
+      window.setTimeout(() => {
+        ensureVideoSource(video);
+      }, delay);
+    });
+  };
+
+  const initDesktopScrollPerfMode = () => {
+    if (!document.body) {
+      return;
+    }
+    let scrollTimer = 0;
+    const enableScrollMode = () => {
+      if (window.innerWidth < 901) {
+        document.body.classList.remove("is-scrolling");
+        return;
+      }
+      document.body.classList.add("is-scrolling");
+      if (scrollTimer) {
+        window.clearTimeout(scrollTimer);
+      }
+      scrollTimer = window.setTimeout(() => {
+        document.body.classList.remove("is-scrolling");
+        scrollTimer = 0;
+      }, 140);
+    };
+
+    window.addEventListener("scroll", enableScrollMode, { passive: true });
+    window.addEventListener("wheel", enableScrollMode, { passive: true });
+    window.addEventListener("resize", () => {
+      if (window.innerWidth < 901) {
+        document.body.classList.remove("is-scrolling");
+      }
     });
   };
 
@@ -434,7 +481,7 @@ document.addEventListener("DOMContentLoaded", () => {
             pauseVideo(video);
           }
         });
-        syncVideoPlayback();
+        scheduleVideoPlaybackSync();
       },
       {
         threshold: [0, 0.25, 0.5, 0.75],
@@ -447,15 +494,10 @@ document.addEventListener("DOMContentLoaded", () => {
         allVideos.forEach((video) => pauseVideo(video));
         return;
       }
-      syncVideoPlayback();
+      scheduleVideoPlaybackSync();
     });
-    window.addEventListener("resize", syncVideoPlayback);
+    window.addEventListener("resize", scheduleVideoPlaybackSync);
   }
-
-  initScrollDownCue();
-  bindHorizontalTrackHintEvents();
-  syncHorizontalDragHints();
-  window.addEventListener("resize", syncHorizontalDragHints);
 
   const horizontalTrackSelector =
     ".video-arena, .progression-grid, .day-grid, .portal-items-row";
@@ -464,6 +506,48 @@ document.addEventListener("DOMContentLoaded", () => {
       return null;
     }
     return target.closest(horizontalTrackSelector);
+  };
+  const publicMediaTrackSelector = ".video-arena, .progression-grid";
+  const trackScrollState = new WeakMap();
+  const getTrackScrollState = (track) => {
+    let state = trackScrollState.get(track);
+    if (!state) {
+      state = { rafId: 0, target: track.scrollLeft, snapTimer: 0 };
+      trackScrollState.set(track, state);
+    }
+    return state;
+  };
+  const animateTrackScroll = (track) => {
+    const state = getTrackScrollState(track);
+    state.rafId = 0;
+    const diff = state.target - track.scrollLeft;
+    if (Math.abs(diff) < 0.6) {
+      track.scrollLeft = state.target;
+      return;
+    }
+    track.scrollLeft += diff * 0.22;
+    state.rafId = window.requestAnimationFrame(() => animateTrackScroll(track));
+  };
+  const queueTrackAnimation = (track, nextTarget) => {
+    const state = getTrackScrollState(track);
+    state.target = nextTarget;
+    if (!state.rafId) {
+      state.rafId = window.requestAnimationFrame(() => animateTrackScroll(track));
+    }
+  };
+  const suspendTrackSnap = (track) => {
+    if (!track.matches(publicMediaTrackSelector)) {
+      return;
+    }
+    const state = getTrackScrollState(track);
+    track.style.scrollSnapType = "none";
+    if (state.snapTimer) {
+      window.clearTimeout(state.snapTimer);
+    }
+    state.snapTimer = window.setTimeout(() => {
+      track.style.scrollSnapType = "";
+      state.snapTimer = 0;
+    }, 160);
   };
 
   document.addEventListener(
@@ -487,90 +571,29 @@ document.addEventListener("DOMContentLoaded", () => {
       if (Math.abs(delta) < 1) {
         return;
       }
-      const next = track.scrollLeft + delta;
+      const state = getTrackScrollState(track);
+      const base = isPublicMediaTrack ? state.target : track.scrollLeft;
+      const next = base + delta;
       const clamped = Math.max(0, Math.min(max, next));
-      if (Math.abs(clamped - track.scrollLeft) < 0.5) {
+      if (Math.abs(clamped - base) < 0.5) {
         return;
       }
       if (isPublicMediaTrack) {
         event.preventDefault();
+        suspendTrackSnap(track);
+        queueTrackAnimation(track, clamped);
+        return;
       }
       track.scrollLeft = clamped;
     },
     { passive: false }
   );
 
-  const dragTracks = Array.from(document.querySelectorAll(".video-arena, .progression-grid"));
-  dragTracks.forEach((track) => {
-    let pointerDown = false;
-    let startX = 0;
-    let startLeft = 0;
-    let moved = false;
-
-    track.addEventListener("pointerdown", (event) => {
-      if (event.pointerType !== "mouse" || event.button !== 0) {
-        return;
-      }
-      if (track.scrollWidth <= track.clientWidth + 2) {
-        return;
-      }
-      pointerDown = true;
-      moved = false;
-      startX = event.clientX;
-      startLeft = track.scrollLeft;
-      track.style.scrollBehavior = "auto";
-      track.setPointerCapture(event.pointerId);
-    });
-
-    track.addEventListener("pointermove", (event) => {
-      if (!pointerDown) {
-        return;
-      }
-      const delta = event.clientX - startX;
-      if (Math.abs(delta) > 2) {
-        moved = true;
-      }
-      track.scrollLeft = startLeft - delta;
-    });
-
-    const stopDrag = (event) => {
-      if (!pointerDown) {
-        return;
-      }
-      pointerDown = false;
-      track.style.scrollBehavior = "";
-      if (event && typeof event.pointerId === "number") {
-        try {
-          track.releasePointerCapture(event.pointerId);
-        } catch (error) {
-          // Ignore browsers that already released the pointer capture.
-        }
-      }
-      setTimeout(() => {
-        moved = false;
-      }, 0);
-    };
-
-    track.addEventListener("pointerup", stopDrag);
-    track.addEventListener("pointercancel", stopDrag);
-    track.addEventListener("pointerleave", (event) => {
-      if (event.pointerType === "mouse") {
-        stopDrag(event);
-      }
-    });
-
-    track.addEventListener(
-      "click",
-      (event) => {
-        if (!moved) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-      },
-      true
-    );
-  });
+  initScrollDownCue();
+  initDesktopScrollPerfMode();
+  bindHorizontalTrackHintEvents();
+  syncHorizontalDragHints();
+  window.addEventListener("resize", syncHorizontalDragHints);
 
   const planEditor = document.querySelector(".plan-editor");
   if (planEditor) {

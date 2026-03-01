@@ -2135,9 +2135,6 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
             f'        <div class="week-bar"><span style="--done:{donut_done};--missed:{donut_missed};--pending:{donut_pending};"></span></div>'
         )
         parts.append("      </div>")
-        parts.append(
-            '      <span class="horizontal-drag-hint" data-drag-hint>Arrastra hacia la derecha para ver más días.</span>'
-        )
         parts.append('      <div class="day-grid">')
         days = week.get("days") or []
         for day_index, day_text in enumerate(days, start=1):
@@ -2157,10 +2154,6 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
             if rest_flag or not isinstance(items, list) or not items:
                 parts.append('          <p class="plan-empty">Descanso o movilidad.</p>')
             if not rest_flag and isinstance(items, list) and items:
-                if len(items) > 1:
-                    parts.append(
-                        '          <span class="portal-scroll-hint">Desliza a la derecha para ver más ejercicios.</span>'
-                    )
                 parts.append('          <div class="plan-items portal-items-row">')
                 for item_index, item in enumerate(items, start=1):
                     if not isinstance(item, dict):
