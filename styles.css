@@ -876,10 +876,13 @@ h3 {
   background-size: 46px 100%;
 }
 
-.video-arena::before,
-.video-arena::after,
-.progression-grid::before,
-.progression-grid::after {
+.horizontal-track-shell {
+  position: relative;
+  width: 100%;
+}
+
+.horizontal-track-shell::before,
+.horizontal-track-shell::after {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
@@ -900,15 +903,13 @@ h3 {
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
 }
 
-.video-arena.can-scroll-left::before,
-.progression-grid.can-scroll-left::before {
+.horizontal-track-shell.can-scroll-left::before {
   content: "‹";
   left: 10px;
   opacity: 0.68;
 }
 
-.video-arena.can-scroll-right::after,
-.progression-grid.can-scroll-right::after {
+.horizontal-track-shell.can-scroll-right::after {
   content: "›";
   right: 10px;
   opacity: 0.96;
@@ -3234,43 +3235,21 @@ h3 {
     background-size: 42px 100%;
   }
 
-  .day-grid::before,
-  .day-grid::after,
-  .portal-items-row::before,
-  .portal-items-row::after {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
+  .horizontal-track-shell::before,
+  .horizontal-track-shell::after {
     width: 32px;
     height: 32px;
-    border-radius: 999px;
-    border: 1px solid rgba(74, 241, 173, 0.24);
-    background: rgba(6, 16, 11, 0.76);
-    color: rgba(233, 248, 239, 0.95);
-    display: grid;
-    place-items: center;
     font-size: 1rem;
-    line-height: 1;
-    z-index: 3;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
   }
 
-  .day-grid.can-scroll-left::before,
-  .portal-items-row.can-scroll-left::before {
-    content: "‹";
+  .horizontal-track-shell.can-scroll-left::before {
     left: 8px;
     opacity: 0.6;
   }
 
-  .day-grid.can-scroll-right::after,
-  .portal-items-row.can-scroll-right::after {
-    content: "›";
+  .horizontal-track-shell.can-scroll-right::after {
     right: 8px;
     opacity: 0.92;
-    animation: drag-right-cue 1.1s ease-in-out infinite;
   }
 
   .day-grid.is-scrollable-track.can-scroll-right,

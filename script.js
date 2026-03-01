@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const fallbackVideos = [
     '<div class="video-card tall stagger-item">',
     '  <div class="video-thumb">',
-    '    <video data-src="FOTOS/dominadas.mp4" autoplay loop muted playsinline preload="none"></video>',
+    '    <video data-src="FOTOS/dominadas.mp4" data-mobile-src="mobile-media/FOTOS/dominadas.mp4" autoplay loop muted playsinline preload="none"></video>',
     "  </div>",
     '  <div class="video-meta">',
     '    <span class="tag glass-pill">Dominadas</span>',
@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "</div>",
     '<div class="video-card stagger-item">',
     '  <div class="video-thumb">',
-    '    <video data-src="FOTOS/pino-video.mp4" autoplay loop muted playsinline preload="none"></video>',
+    '    <video data-src="FOTOS/pino-video.mp4" data-mobile-src="mobile-media/FOTOS/pino-video.mp4" autoplay loop muted playsinline preload="none"></video>',
     "  </div>",
     '  <div class="video-meta">',
     '    <span class="tag glass-pill">Pino</span>',
@@ -51,7 +51,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "</div>",
     '<div class="video-card wide stagger-item">',
     '  <div class="video-thumb">',
-    '    <video data-src="FOTOS/fondos.mp4" autoplay loop muted playsinline preload="none"></video>',
+    '    <video data-src="FOTOS/fondos.mp4" data-mobile-src="mobile-media/FOTOS/fondos.mp4" autoplay loop muted playsinline preload="none"></video>',
     "  </div>",
     '  <div class="video-meta">',
     '    <span class="tag glass-pill">Fondos</span>',
@@ -61,7 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "</div>",
     '<div class="video-card stagger-item">',
     '  <div class="video-thumb">',
-    '    <video data-src="FOTOS/back-lever.mp4" autoplay loop muted playsinline preload="none"></video>',
+    '    <video data-src="FOTOS/back-lever.mp4" data-mobile-src="mobile-media/FOTOS/back-lever.mp4" autoplay loop muted playsinline preload="none"></video>',
     "  </div>",
     '  <div class="video-meta">',
     '    <span class="tag glass-pill">Back lever</span>',
@@ -226,6 +226,23 @@ document.addEventListener("DOMContentLoaded", () => {
     updateCue();
   };
 
+  const horizontalTrackSelector =
+    ".video-arena, .progression-grid, .day-grid, .portal-items-row";
+  const horizontalTrackShellClass = "horizontal-track-shell";
+
+  const ensureHorizontalTrackShells = () => {
+    document.querySelectorAll(horizontalTrackSelector).forEach((track) => {
+      const parent = track.parentElement;
+      if (parent && parent.classList.contains(horizontalTrackShellClass)) {
+        return;
+      }
+      const shell = document.createElement("div");
+      shell.className = horizontalTrackShellClass;
+      track.parentNode.insertBefore(shell, track);
+      shell.appendChild(track);
+    });
+  };
+
   const updateHorizontalTrackState = (track) => {
     if (!track) {
       return;
@@ -238,6 +255,12 @@ document.addEventListener("DOMContentLoaded", () => {
     track.classList.toggle("is-scrollable-track", isScrollable);
     track.classList.toggle("can-scroll-right", canScrollRight);
     track.classList.toggle("can-scroll-left", canScrollLeft);
+    const shell = track.parentElement;
+    if (shell && shell.classList.contains(horizontalTrackShellClass)) {
+      shell.classList.toggle("is-scrollable-track", isScrollable);
+      shell.classList.toggle("can-scroll-right", canScrollRight);
+      shell.classList.toggle("can-scroll-left", canScrollLeft);
+    }
 
     const hint = track.previousElementSibling;
     if (hint && hint.hasAttribute("data-drag-hint")) {
@@ -277,15 +300,22 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const ensureVideoSource = (video) => {
-    const src = video.getAttribute("src");
-    if (src && src.trim()) {
-      return true;
-    }
-    const lazySrc = (video.dataset && video.dataset.src) || video.getAttribute("data-src") || "";
+    const defaultSrc = (video.dataset && video.dataset.src) || video.getAttribute("data-src") || "";
+    const mobileSrc =
+      (video.dataset && video.dataset.mobileSrc) || video.getAttribute("data-mobile-src") || "";
+    const lazySrc =
+      (window.matchMedia && window.matchMedia("(max-width: 900px)").matches) || window.innerWidth <= 900
+        ? mobileSrc.trim() || defaultSrc
+        : defaultSrc;
     if (!lazySrc.trim()) {
       return false;
     }
+    const src = video.getAttribute("src") || "";
+    if (src.trim() && video.dataset.loadedSrc === lazySrc) {
+      return true;
+    }
     video.setAttribute("src", resolveMediaUrl(lazySrc));
+    video.dataset.loadedSrc = lazySrc;
     video.load();
     return true;
   };
@@ -345,6 +375,8 @@ document.addEventListener("DOMContentLoaded", () => {
     video.addEventListener("playing", clearIndicator);
     video.addEventListener("play", clearIndicator);
   };
+
+  ensureHorizontalTrackShells();
 
   const allVideos = Array.from(document.querySelectorAll("video"));
   const featuredVideos = allVideos.filter(
@@ -499,8 +531,6 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("resize", scheduleVideoPlaybackSync);
   }
 
-  const horizontalTrackSelector =
-    ".video-arena, .progression-grid, .day-grid, .portal-items-row";
   const resolveHorizontalTrack = (target) => {
     if (!(target instanceof Element)) {
       return null;
