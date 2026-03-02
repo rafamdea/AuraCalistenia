@@ -1480,6 +1480,19 @@ h3 {
   scroll-snap-align: start;
 }
 
+.video-arena.is-scrollable-track,
+.progression-grid.is-scrollable-track,
+.portal-items-row.is-scrollable-track {
+  cursor: grab;
+}
+
+.video-arena.is-pointer-dragging,
+.progression-grid.is-pointer-dragging,
+.portal-items-row.is-pointer-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
 .portal-item.done {
   border-color: rgba(88, 217, 120, 0.45);
   background: rgba(88, 217, 120, 0.1);

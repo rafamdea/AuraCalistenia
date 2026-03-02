@@ -538,6 +538,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return target.closest(horizontalTrackSelector);
   };
   const publicMediaTrackSelector = ".video-arena, .progression-grid";
+  const wheelAssistTrackSelector = ".video-arena, .progression-grid, .portal-items-row";
+  const pointerDragTrackSelector = ".video-arena, .progression-grid, .portal-items-row";
+  const interactiveTrackTargetSelector = "a, button, input, textarea, select, label, summary";
   const trackScrollState = new WeakMap();
   const getTrackScrollState = (track) => {
     let state = trackScrollState.get(track);
@@ -594,10 +597,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const horizontalDelta = Math.abs(event.deltaX);
       const verticalDelta = Math.abs(event.deltaY);
       const isPublicMediaTrack = track.matches(".video-arena, .progression-grid");
-      if (!isPublicMediaTrack && !event.shiftKey && horizontalDelta <= verticalDelta) {
+      const isWheelAssistTrack = track.matches(wheelAssistTrackSelector);
+      if (!isWheelAssistTrack && !event.shiftKey && horizontalDelta <= verticalDelta) {
         return;
       }
-      const delta = isPublicMediaTrack ? event.deltaY || event.deltaX : event.deltaX || event.deltaY;
+      const delta = isWheelAssistTrack ? event.deltaY || event.deltaX : event.deltaX || event.deltaY;
       if (Math.abs(delta) < 1) {
         return;
       }
@@ -608,8 +612,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (Math.abs(clamped - base) < 0.5) {
         return;
       }
-      if (isPublicMediaTrack) {
+      if (isWheelAssistTrack) {
         event.preventDefault();
+      }
+      if (isPublicMediaTrack) {
         suspendTrackSnap(track);
         queueTrackAnimation(track, clamped);
         return;
@@ -619,9 +625,87 @@ document.addEventListener("DOMContentLoaded", () => {
     { passive: false }
   );
 
+  const bindPointerDragTracks = () => {
+    document.querySelectorAll(pointerDragTrackSelector).forEach((track) => {
+      if (track.dataset.pointerDragBound === "1") {
+        return;
+      }
+      track.dataset.pointerDragBound = "1";
+      let dragState = null;
+      let suppressClick = false;
+
+      const finishDrag = () => {
+        if (!dragState) {
+          return;
+        }
+        if (dragState.moved) {
+          suppressClick = true;
+        }
+        dragState = null;
+        track.classList.remove("is-pointer-dragging");
+        updateHorizontalTrackState(track);
+      };
+
+      track.addEventListener("pointerdown", (event) => {
+        if (event.pointerType !== "mouse" || event.button !== 0) {
+          return;
+        }
+        if (track.scrollWidth - track.clientWidth <= 2) {
+          return;
+        }
+        const target = event.target;
+        if (target instanceof Element && target.closest(interactiveTrackTargetSelector)) {
+          return;
+        }
+        dragState = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startScroll: track.scrollLeft,
+          moved: false,
+        };
+        track.classList.add("is-pointer-dragging");
+        track.setPointerCapture(event.pointerId);
+      });
+
+      track.addEventListener("pointermove", (event) => {
+        if (!dragState || dragState.pointerId !== event.pointerId) {
+          return;
+        }
+        const deltaX = event.clientX - dragState.startX;
+        if (!dragState.moved && Math.abs(deltaX) > 4) {
+          dragState.moved = true;
+        }
+        if (!dragState.moved) {
+          return;
+        }
+        track.scrollLeft = dragState.startScroll - deltaX;
+        const state = getTrackScrollState(track);
+        state.target = track.scrollLeft;
+        updateHorizontalTrackState(track);
+      });
+
+      track.addEventListener("pointerup", finishDrag);
+      track.addEventListener("pointercancel", finishDrag);
+      track.addEventListener("lostpointercapture", finishDrag);
+      track.addEventListener(
+        "click",
+        (event) => {
+          if (!suppressClick) {
+            return;
+          }
+          suppressClick = false;
+          event.preventDefault();
+          event.stopPropagation();
+        },
+        true
+      );
+    });
+  };
+
   initScrollDownCue();
   initDesktopScrollPerfMode();
   bindHorizontalTrackHintEvents();
+  bindPointerDragTracks();
   syncHorizontalDragHints();
   window.addEventListener("resize", syncHorizontalDragHints);
 
