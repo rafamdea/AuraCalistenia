@@ -25,6 +25,11 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 try:
+    from zoneinfo import ZoneInfo
+except Exception:  # pragma: no cover - Python fallback
+    ZoneInfo = None
+
+try:
     import psycopg
 except Exception:  # pragma: no cover - optional dependency until DATABASE_URL is used
     psycopg = None
@@ -113,6 +118,14 @@ if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", DB_TABLE):
     DB_TABLE = "aura_state"
 DEFAULT_ADMIN_USERNAME = "rmonale"
 DEFAULT_ADMIN_PASSWORD = "Adminaura123!"
+SITE_TIMEZONE_NAME = normalize_env_literal(os.environ.get("AURA_SITE_TIMEZONE", "Europe/Madrid")) or "Europe/Madrid"
+if ZoneInfo is not None:
+    try:
+        SITE_TIMEZONE = ZoneInfo(SITE_TIMEZONE_NAME)
+    except Exception:
+        SITE_TIMEZONE = ZoneInfo("Europe/Madrid")
+else:
+    SITE_TIMEZONE = None
 DAY_LABELS = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
 DB_LAST_ERROR = ""
 SMTP_LAST_ERROR = ""
@@ -134,6 +147,18 @@ try:
     )
 except ValueError:
     STORAGE_STATUS_CACHE_TTL_SECONDS = 30.0
+
+
+def current_site_datetime() -> datetime:
+    if SITE_TIMEZONE is None:
+        return datetime.now()
+    return datetime.now(SITE_TIMEZONE)
+
+
+def site_datetime_from_timestamp(timestamp: int | float) -> datetime:
+    if SITE_TIMEZONE is None:
+        return datetime.fromtimestamp(timestamp)
+    return datetime.fromtimestamp(timestamp, tz=SITE_TIMEZONE)
 
 
 @dataclass
@@ -1120,7 +1145,7 @@ def increment_visit_stats(unique_visit: bool) -> dict:
     with VISIT_STATS_LOCK:
         stats = load_visit_stats()
         now_ts = int(time.time())
-        today_key = datetime.now().strftime("%Y-%m-%d")
+        today_key = current_site_datetime().strftime("%Y-%m-%d")
         daily_views = dict(stats.get("daily_views", {}))
         daily_views[today_key] = int(daily_views.get(today_key, 0)) + 1
         ordered_keys = sorted(daily_views)[-VISIT_HISTORY_DAYS:]
@@ -1148,7 +1173,7 @@ def format_visit_timestamp(timestamp) -> str:
     if parsed <= 0:
         return "Sin visitas todavia"
     try:
-        return datetime.fromtimestamp(parsed).strftime("%d/%m/%Y %H:%M")
+        return site_datetime_from_timestamp(parsed).strftime("%d/%m/%Y %H:%M")
     except (OSError, OverflowError, ValueError):
         return "Sin visitas todavia"
 
@@ -1813,7 +1838,7 @@ def format_date(value: int | float | str) -> str:
         timestamp = int(value)
     except (TypeError, ValueError):
         return ""
-    return time.strftime("%d-%m-%Y", time.localtime(timestamp))
+    return site_datetime_from_timestamp(timestamp).strftime("%d-%m-%Y")
 
 
 def format_datetime(value: int | float | str) -> str:
@@ -1821,7 +1846,7 @@ def format_datetime(value: int | float | str) -> str:
         timestamp = int(value)
     except (TypeError, ValueError):
         return ""
-    return time.strftime("%d-%m %H:%M", time.localtime(timestamp))
+    return site_datetime_from_timestamp(timestamp).strftime("%d-%m %H:%M")
 
 
 def compute_day_progress(day: dict) -> dict:
@@ -2149,7 +2174,7 @@ def render_coach_dashboard(applications: list[dict], storage_status: dict) -> st
 def render_visit_metrics() -> str:
     stats = load_visit_stats()
     daily_views = stats.get("daily_views", {})
-    now = datetime.now()
+    now = current_site_datetime()
     today_key = now.strftime("%Y-%m-%d")
     recent_days = {(now - timedelta(days=offset)).strftime("%Y-%m-%d") for offset in range(7)}
     today_views = int(daily_views.get(today_key, 0))
@@ -2168,7 +2193,7 @@ def render_visit_metrics() -> str:
             '    <summary class="admin-collapsible-summary admin-main-summary">',
             '      <div class="admin-collapsible-main">',
             "        <strong>Visitas a la web</strong>",
-            "        <span>Seguimiento automatico de la portada publica</span>",
+            "        <span>Actividad de la pagina principal en hora de Madrid</span>",
             "      </div>",
             '      <span class="admin-collapsible-tag">Metricas</span>',
             "    </summary>",
@@ -2180,11 +2205,11 @@ def render_visit_metrics() -> str:
             f"        <span>Ultimos 7 dias: <strong>{format_admin_number(recent_views)}</strong></span>",
             "      </div>",
             f'      <div class="storage-pill {status_class}">',
-            '        <span class="storage-pill-label">Seguimiento</span>',
+            '        <span class="storage-pill-label">Actividad</span>',
             f"        <strong>{html.escape(status_title)}</strong>",
-            "        <span>Cuenta cada carga de la pagina principal en <code>/</code>.</span>",
+            "        <span>Cuenta las aperturas de la pagina principal.</span>",
             "        <span>Los visitantes unicos se estiman por navegador usando una cookie persistente.</span>",
-            f"        <span>Ultima visita detectada: {last_visit_text}</span>",
+            f"        <span>Ultima visita detectada: {last_visit_text} (hora de Madrid).</span>",
             "      </div>",
             "    </div>",
             "  </details>",
@@ -2304,6 +2329,8 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
             if rest_flag or not isinstance(items, list) or not items:
                 parts.append('          <p class="plan-empty">Descanso o movilidad.</p>')
             if not rest_flag and isinstance(items, list) and items:
+                if len(items) > 1:
+                    parts.append('          <div class="portal-scroll-hint">Desliza para ver todos los ejercicios en orden</div>')
                 parts.append('          <div class="plan-items portal-items-row">')
                 for item_index, item in enumerate(items, start=1):
                     if not isinstance(item, dict):
@@ -2571,7 +2598,7 @@ def render_password_reset_page(query: dict[str, list[str]]) -> str:
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260301-8\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260302-1\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -2613,7 +2640,7 @@ def render_review_page(card_html: str, page_title: str = "Revisar solicitud - Au
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260301-8\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260302-1\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -3641,7 +3668,7 @@ def render_login_page(error: str | None = None) -> str:
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260301-8\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260302-1\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
