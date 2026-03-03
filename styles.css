@@ -1367,6 +1367,7 @@ h3 {
   display: grid;
   gap: 14px;
   position: relative;
+  min-width: 0;
 }
 
 .day-card {
@@ -1376,6 +1377,12 @@ h3 {
   border: 1px solid rgba(74, 241, 173, 0.18);
   display: grid;
   gap: 12px;
+  min-width: 0;
+}
+
+.day-card .horizontal-track-shell {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .day-card-head {
@@ -1466,6 +1473,9 @@ h3 {
   grid-template-columns: none;
   gap: 12px;
   position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
   padding: 2px 18px 10px 2px;
   scroll-snap-type: x proximity;
