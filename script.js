@@ -243,6 +243,25 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
+  const ensureHorizontalTrackHints = () => {
+    document.querySelectorAll(".portal-items-row").forEach((track) => {
+      const parent = track.parentElement;
+      if (!parent || !parent.classList.contains(horizontalTrackShellClass)) {
+        return;
+      }
+      const hint = track.previousElementSibling;
+      if (hint && hint.hasAttribute("data-drag-hint")) {
+        return;
+      }
+      const dragHint = document.createElement("div");
+      dragHint.className = "horizontal-drag-hint";
+      dragHint.setAttribute("data-drag-hint", "1");
+      dragHint.hidden = true;
+      dragHint.textContent = "Desliza o arrastra para ver todos los ejercicios";
+      parent.insertBefore(dragHint, track);
+    });
+  };
+
   const updateHorizontalTrackState = (track) => {
     if (!track) {
       return;
@@ -377,6 +396,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   ensureHorizontalTrackShells();
+  ensureHorizontalTrackHints();
 
   const allVideos = Array.from(document.querySelectorAll("video"));
   const featuredVideos = allVideos.filter(
@@ -535,12 +555,20 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!(target instanceof Element)) {
       return null;
     }
-    return target.closest(horizontalTrackSelector);
+    const directTrack = target.closest(horizontalTrackSelector);
+    if (directTrack) {
+      return directTrack;
+    }
+    const shell = target.closest(`.${horizontalTrackShellClass}`);
+    if (!shell) {
+      return null;
+    }
+    return shell.querySelector(horizontalTrackSelector);
   };
   const publicMediaTrackSelector = ".video-arena, .progression-grid";
   const wheelAssistTrackSelector = ".video-arena, .progression-grid, .portal-items-row";
   const pointerDragTrackSelector = ".video-arena, .progression-grid, .portal-items-row";
-  const interactiveTrackTargetSelector = "a, button, input, textarea, select, label, summary";
+  const textEntryTrackTargetSelector = "input, textarea, select";
   const trackScrollState = new WeakMap();
   const getTrackScrollState = (track) => {
     let state = trackScrollState.get(track);
@@ -654,7 +682,7 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
         const target = event.target;
-        if (target instanceof Element && target.closest(interactiveTrackTargetSelector)) {
+        if (target instanceof Element && target.closest(textEntryTrackTargetSelector)) {
           return;
         }
         dragState = {
@@ -678,6 +706,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!dragState.moved) {
           return;
         }
+        event.preventDefault();
         track.scrollLeft = dragState.startScroll - deltaX;
         const state = getTrackScrollState(track);
         state.target = track.scrollLeft;
