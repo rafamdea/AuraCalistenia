@@ -768,7 +768,17 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    const itemToLine = (item = {}) => {
+    const blockAliases = {
+      ss: "superset",
+      superserie: "superset",
+      superset: "superset",
+      emom: "emom",
+      unbroken: "unbroken",
+      "set unbroken": "unbroken",
+    };
+    const normalizeBlockType = (value) => blockAliases[String(value || "").trim().toLowerCase()] || "";
+
+    const simpleItemToLine = (item = {}) => {
       const parts = [
         String(item.exercise || "").trim(),
         String(item.sets || "").trim(),
@@ -781,6 +791,48 @@ document.addEventListener("DOMContentLoaded", () => {
         parts.pop();
       }
       return parts.length ? parts.join(" | ") : "";
+    };
+
+    const itemToLine = (item = {}) => {
+      const type = normalizeBlockType(item.type);
+      if (["superset", "emom", "unbroken"].includes(type)) {
+        let parts = [];
+        if (type === "emom") {
+          parts = [
+            "EMOM",
+            String(item.name || "").trim(),
+            String(item.duration || "").trim(),
+            String(item.interval || "").trim(),
+            String(item.rest_after || "").trim(),
+            String(item.notes || "").trim(),
+          ];
+        } else if (type === "unbroken") {
+          parts = [
+            "UNBROKEN",
+            String(item.name || "").trim(),
+            String(item.rounds || "").trim(),
+            String(item.rest_after || "").trim(),
+            String(item.notes || "").trim(),
+          ];
+        } else {
+          parts = [
+            "SUPERSERIE",
+            String(item.name || "").trim(),
+            String(item.rounds || "").trim(),
+            String(item.rest_between || "").trim(),
+            String(item.rest_after || "").trim(),
+            String(item.notes || "").trim(),
+          ];
+        }
+        while (parts.length && !parts[parts.length - 1]) {
+          parts.pop();
+        }
+        const childLines = Array.isArray(item.exercises)
+          ? item.exercises.map((child) => simpleItemToLine(child)).filter(Boolean).map((line) => `- ${line}`)
+          : [];
+        return [parts.join(" | "), ...childLines].filter(Boolean).join("\n");
+      }
+      return simpleItemToLine(item);
     };
 
     const itemsToText = (items) => {
@@ -798,16 +850,57 @@ document.addEventListener("DOMContentLoaded", () => {
         .split("\n")
         .map((line) => line.trim())
         .filter((line) => line)
-        .map((line) => {
+        .reduce((items, rawLine) => {
+          let line = rawLine;
+          const childLine = line.startsWith("-");
+          if (childLine) {
+            line = line.slice(1).trim();
+          }
           const parts = line.split("|").map((chunk) => chunk.trim());
+          const type = normalizeBlockType(parts[0]);
+          if (["superset", "emom", "unbroken"].includes(type)) {
+            let block = null;
+            if (type === "emom") {
+              block = {
+                type,
+                name: parts[1] || "EMOM",
+                duration: parts[2] || "",
+                interval: parts[3] || "",
+                rest_after: parts[4] || "",
+                notes: parts[5] || "",
+                exercises: [],
+              };
+            } else if (type === "unbroken") {
+              block = {
+                type,
+                name: parts[1] || "Set unbroken",
+                rounds: parts[2] || "",
+                rest_after: parts[3] || "",
+                notes: parts[4] || "",
+                exercises: [],
+              };
+            } else {
+              block = {
+                type,
+                name: parts[1] || "Superserie",
+                rounds: parts[2] || "",
+                rest_between: parts[3] || "",
+                rest_after: parts[4] || "",
+                notes: parts[5] || "",
+                exercises: [],
+              };
+            }
+            items.push(block);
+            return items;
+          }
           while (parts.length < 6) {
             parts.push("");
           }
           const [exercise, sets, reps, weight, rest, notes] = parts;
           if (!exercise) {
-            return null;
+            return items;
           }
-          return {
+          const parsed = {
             exercise,
             sets,
             reps,
@@ -815,8 +908,15 @@ document.addEventListener("DOMContentLoaded", () => {
             rest,
             notes,
           };
-        })
-        .filter((item) => item);
+          const last = items[items.length - 1];
+          if (childLine && last && ["superset", "emom", "unbroken"].includes(normalizeBlockType(last.type))) {
+            last.exercises = Array.isArray(last.exercises) ? last.exercises : [];
+            last.exercises.push(parsed);
+          } else {
+            items.push(parsed);
+          }
+          return items;
+        }, []);
     };
 
     const updateRestState = (dayCard) => {
@@ -1437,7 +1537,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (section !== "portal") {
         nextUrl.searchParams.delete("plan_user");
       }
-      window.location.assign(nextUrl.toString());
+      window.history.pushState({}, "", nextUrl.toString());
+      activateSection(section, false);
     };
     const activateSection = (section, syncUrl = true) => {
       if (!hasSection(section)) {
@@ -1528,6 +1629,99 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
   }
+
+  const updatePortalWeekStats = (weekCard, stats) => {
+    if (!weekCard || !stats) return;
+    const kpi = weekCard.querySelector(".week-kpi");
+    if (kpi) {
+      kpi.innerHTML = `<span>✓ ${stats.done || 0} (${stats.done_pct || 0}%)</span><span>✕ ${stats.missed || 0} (${stats.missed_pct || 0}%)</span><span>⏳ ${stats.pending || 0} (${stats.pending_pct || 0}%)</span>`;
+    }
+    const donut = weekCard.querySelector(".week-donut");
+    const done = Number(stats.done_pct || 0);
+    const missed = Number(stats.missed_pct || 0);
+    const pending = Math.max(0, 100 - done - missed);
+    if (donut) {
+      donut.style.setProperty("--done", String(done));
+      donut.style.setProperty("--missed", String(missed));
+      donut.style.setProperty("--pending", String(pending));
+      const label = donut.querySelector("span");
+      if (label) label.textContent = `${done}%`;
+    }
+    const bar = weekCard.querySelector(".week-bar span");
+    if (bar) {
+      bar.style.setProperty("--done", String(done));
+      bar.style.setProperty("--missed", String(missed));
+      bar.style.setProperty("--pending", String(pending));
+    }
+  };
+
+  const updatePortalDayStats = (dayCard, stats) => {
+    if (!dayCard || !stats) return;
+    const mini = dayCard.querySelector(".day-mini-stats");
+    if (mini) {
+      mini.textContent = `✓ ${stats.done || 0} · ✕ ${stats.missed || 0} · ⏳ ${stats.pending || 0}`;
+    }
+  };
+
+  const updatePortalItemCard = (form, payload) => {
+    const card = form.closest(".portal-item");
+    if (!card || !payload) return;
+    const statusClass = payload.status_class || "pending";
+    card.classList.remove("done", "missed", "pending");
+    card.classList.add(statusClass);
+    const badge = card.querySelector(".item-status");
+    if (badge) {
+      badge.className = `item-status ${statusClass}`;
+      badge.textContent = payload.status_label || "Pendiente";
+    }
+    card.querySelectorAll(".status-button").forEach((button) => {
+      button.classList.toggle("is-active", button.value === payload.status);
+    });
+    const note = card.querySelector(".item-status-note");
+    if (note) {
+      note.textContent = payload.status_note || "";
+      note.hidden = !payload.status_note;
+    }
+  };
+
+  document.querySelectorAll("[data-portal-item-form], [data-portal-week-form]").forEach((form) => {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const state = form.querySelector(".portal-save-state");
+      if (state) state.textContent = "Guardando...";
+      const data = new FormData(form);
+      if (event.submitter && event.submitter.name) {
+        data.set(event.submitter.name, event.submitter.value);
+      }
+      try {
+        const res = await fetch(form.action, {
+          method: "POST",
+          body: data,
+          headers: {
+            Accept: "application/json",
+            "X-Requested-With": "fetch",
+          },
+        });
+        const payload = await res.json();
+        if (!res.ok || !payload.ok) {
+          throw new Error(payload.error || "save_failed");
+        }
+        if (form.matches("[data-portal-item-form]")) {
+          updatePortalItemCard(form, payload);
+          updatePortalWeekStats(form.closest(".training-week"), payload.week_stats);
+          updatePortalDayStats(form.closest(".day-card"), payload.day_stats);
+        }
+        if (state) {
+          state.textContent = "Guardado";
+          setTimeout(() => {
+            if (state.textContent === "Guardado") state.textContent = "";
+          }, 1500);
+        }
+      } catch (error) {
+        if (state) state.textContent = "No se pudo guardar";
+      }
+    });
+  });
 
   const staggerGroups = document.querySelectorAll("[data-stagger]");
   staggerGroups.forEach((group) => {

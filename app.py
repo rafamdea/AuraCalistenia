@@ -131,11 +131,14 @@ DB_LAST_ERROR = ""
 SMTP_LAST_ERROR = ""
 JSON_CACHE_LOCK = threading.Lock()
 JSON_CACHE: dict[str, tuple[float, object]] = {}
+TEMPLATE_CACHE_LOCK = threading.Lock()
+TEMPLATE_CACHE: dict[str, tuple[float, str]] = {}
 STORAGE_STATUS_CACHE_LOCK = threading.Lock()
 STORAGE_STATUS_CACHE: tuple[float, dict] | None = None
 BACKGROUND_TASKS_LOCK = threading.Lock()
 BACKGROUND_TASKS: set[threading.Thread] = set()
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+PLAN_BLOCK_TYPES = {"superset", "emom", "unbroken"}
 try:
     JSON_CACHE_TTL_SECONDS = max(float(os.environ.get("AURA_CACHE_TTL_SECONDS", "15")), 0.0)
 except ValueError:
@@ -446,6 +449,27 @@ def run_background_task(func, *args, **kwargs) -> None:
             func(*args, **kwargs)
         except Exception as exc:
             remember_smtp_error(exc)
+        finally:
+            with BACKGROUND_TASKS_LOCK:
+                thread = thread_ref.get("thread")
+                if thread is not None:
+                    BACKGROUND_TASKS.discard(thread)
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread_ref["thread"] = thread
+    with BACKGROUND_TASKS_LOCK:
+        BACKGROUND_TASKS.add(thread)
+    thread.start()
+
+
+def run_background_job(func, *args, **kwargs) -> None:
+    thread_ref: dict[str, threading.Thread] = {}
+
+    def worker() -> None:
+        try:
+            func(*args, **kwargs)
+        except Exception as exc:
+            print(f"Error en tarea de fondo: {exc}")
         finally:
             with BACKGROUND_TASKS_LOCK:
                 thread = thread_ref.get("thread")
@@ -1218,8 +1242,52 @@ def smtp_missing_fields(smtp_settings: dict) -> list[str]:
     return missing
 
 
+def normalize_training_block_type(value: str) -> str:
+    cleaned = str(value or "").strip().lower()
+    aliases = {
+        "ss": "superset",
+        "superserie": "superset",
+        "superset": "superset",
+        "emom": "emom",
+        "set unbroken": "unbroken",
+        "unbroken": "unbroken",
+    }
+    return aliases.get(cleaned, "")
+
+
 def normalize_plan_item(item) -> dict:
     if isinstance(item, dict):
+        item_type = normalize_training_block_type(item.get("type") or item.get("block_type"))
+        if item_type in PLAN_BLOCK_TYPES:
+            source_exercises = item.get("exercises")
+            if source_exercises is None:
+                source_exercises = item.get("items")
+            if source_exercises is None:
+                source_exercises = item.get("ejercicios")
+            exercises = []
+            if isinstance(source_exercises, list):
+                for sub_item in source_exercises:
+                    normalized_sub = normalize_plan_item(sub_item)
+                    if normalized_sub and not normalize_training_block_type(normalized_sub.get("type", "")):
+                        exercises.append(normalized_sub)
+            block_name = str(
+                item.get("name")
+                or item.get("title")
+                or item.get("exercise")
+                or ("EMOM" if item_type == "emom" else ("Set unbroken" if item_type == "unbroken" else "Superserie"))
+            ).strip()
+            return {
+                "type": item_type,
+                "name": block_name,
+                "rounds": str(item.get("rounds", item.get("rondas", ""))).strip(),
+                "duration": str(item.get("duration", item.get("duration_minutes", item.get("duracion_minutos", "")))).strip(),
+                "interval": str(item.get("interval", item.get("each", item.get("cada", "")))).strip(),
+                "rest_between": str(item.get("rest_between", item.get("descanso_entre_series", ""))).strip(),
+                "rest_after": str(item.get("rest_after", item.get("descanso_final", ""))).strip(),
+                "notes": str(item.get("notes", item.get("comentario_prof", ""))).strip(),
+                "exercises": exercises,
+            }
+
         rest_value = str(item.get("rest", "")).strip()
         if not rest_value:
             rest_value = str(item.get("accessories", "")).strip()
@@ -1278,7 +1346,10 @@ def normalize_plan_day(day) -> dict:
     normalized_items = []
     for item in items_source:
         normalized = normalize_plan_item(item)
-        if normalized and normalized.get("exercise"):
+        if normalized and (
+            normalized.get("exercise")
+            or normalize_training_block_type(normalized.get("type", "")) in PLAN_BLOCK_TYPES
+        ):
             normalized_items.append(normalized)
     return {
         "title": title,
@@ -1600,7 +1671,18 @@ def strip_fallback_blocks(content: str, key: str) -> str:
 
 
 def render_template(path: Path, replacements: dict[str, str]) -> str:
-    content = path.read_text(encoding="utf-8")
+    cache_key = str(path.resolve())
+    try:
+        modified_at = path.stat().st_mtime
+    except OSError:
+        modified_at = 0
+    with TEMPLATE_CACHE_LOCK:
+        cached = TEMPLATE_CACHE.get(cache_key)
+        if cached and cached[0] == modified_at:
+            content = cached[1]
+        else:
+            content = path.read_text(encoding="utf-8")
+            TEMPLATE_CACHE[cache_key] = (modified_at, content)
     for key, value in replacements.items():
         token = "{{" + key + "}}"
         content = content.replace(f"<!-- {token} -->", value)
@@ -1853,12 +1935,29 @@ def compute_day_progress(day: dict) -> dict:
     items = day.get("items") if isinstance(day, dict) else []
     if not isinstance(items, list):
         items = []
-    total = len([item for item in items if isinstance(item, dict) and str(item.get("exercise", "")).strip()])
     done = 0
     missed = 0
+    total = 0
     for item in items:
         if not isinstance(item, dict):
             continue
+        if normalize_training_block_type(item.get("type", "")) in PLAN_BLOCK_TYPES:
+            exercises = item.get("exercises")
+            if not isinstance(exercises, list):
+                continue
+            for sub_item in exercises:
+                if not isinstance(sub_item, dict) or not str(sub_item.get("exercise", "")).strip():
+                    continue
+                total += 1
+                status = str(sub_item.get("status", "")).strip()
+                if status == "done":
+                    done += 1
+                elif status == "missed":
+                    missed += 1
+            continue
+        if not str(item.get("exercise", "")).strip():
+            continue
+        total += 1
         status = str(item.get("status", "")).strip()
         if status == "done":
             done += 1
@@ -2226,6 +2325,53 @@ def plan_day_to_text(day: dict) -> str:
     for item in items:
         if not isinstance(item, dict):
             continue
+        item_type = normalize_training_block_type(item.get("type", ""))
+        if item_type in PLAN_BLOCK_TYPES:
+            if item_type == "emom":
+                parts = [
+                    "EMOM",
+                    str(item.get("name", "")).strip(),
+                    str(item.get("duration", "")).strip(),
+                    str(item.get("interval", "")).strip(),
+                    str(item.get("rest_after", "")).strip(),
+                    str(item.get("notes", "")).strip(),
+                ]
+            elif item_type == "unbroken":
+                parts = [
+                    "UNBROKEN",
+                    str(item.get("name", "")).strip(),
+                    str(item.get("rounds", "")).strip(),
+                    str(item.get("rest_after", "")).strip(),
+                    str(item.get("notes", "")).strip(),
+                ]
+            else:
+                parts = [
+                    "SUPERSERIE",
+                    str(item.get("name", "")).strip(),
+                    str(item.get("rounds", "")).strip(),
+                    str(item.get("rest_between", "")).strip(),
+                    str(item.get("rest_after", "")).strip(),
+                    str(item.get("notes", "")).strip(),
+                ]
+            while parts and not parts[-1]:
+                parts.pop()
+            lines.append(" | ".join(parts))
+            for sub_item in item.get("exercises", []):
+                if not isinstance(sub_item, dict):
+                    continue
+                sub_parts = [
+                    str(sub_item.get("exercise", "")).strip(),
+                    str(sub_item.get("sets", "")).strip(),
+                    str(sub_item.get("reps", "")).strip(),
+                    str(sub_item.get("weight", "")).strip(),
+                    str(sub_item.get("rest", "")).strip(),
+                    str(sub_item.get("notes", "")).strip(),
+                ]
+                while sub_parts and not sub_parts[-1]:
+                    sub_parts.pop()
+                if sub_parts:
+                    lines.append("- " + " | ".join(sub_parts))
+            continue
         parts = [
             str(item.get("exercise", "")).strip(),
             str(item.get("sets", "")).strip(),
@@ -2249,6 +2395,130 @@ def plan_week_to_texts(week: dict) -> list[str]:
     if len(texts) < 7:
         texts.extend(["" for _ in range(7 - len(texts))])
     return texts[:7]
+
+
+def portal_item_status(item: dict) -> tuple[str, str]:
+    status = str(item.get("status", "")).strip()
+    if status == "done":
+        return "Completado", "done"
+    if status == "missed":
+        return "Fallado", "missed"
+    return "Pendiente", "pending"
+
+
+def portal_item_meta_html(item: dict) -> str:
+    meta_parts = []
+    fields = [
+        ("Series", item.get("sets", "")),
+        ("Reps", item.get("reps", "")),
+        ("Peso", item.get("weight", "")),
+        ("Descanso", item.get("rest", "")),
+        ("Notas", item.get("notes", "")),
+    ]
+    for label, value in fields:
+        cleaned = str(value or "").strip()
+        if cleaned:
+            meta_parts.append(f"<span>{label}: {html.escape(cleaned)}</span>")
+    return "".join(meta_parts) if meta_parts else "<span>Trabajo técnico.</span>"
+
+
+def portal_block_meta_html(item: dict) -> str:
+    item_type = normalize_training_block_type(item.get("type", ""))
+    fields = []
+    if item_type == "emom":
+        fields = [
+            ("Duración", item.get("duration", "")),
+            ("Cada", item.get("interval", "")),
+            ("Descanso final", item.get("rest_after", "")),
+        ]
+    elif item_type == "unbroken":
+        fields = [
+            ("Rondas", item.get("rounds", "")),
+            ("Descanso final", item.get("rest_after", "")),
+        ]
+    else:
+        fields = [
+            ("Rondas", item.get("rounds", "")),
+            ("Descanso entre superseries", item.get("rest_between", "")),
+            ("Descanso final", item.get("rest_after", "")),
+        ]
+    if str(item.get("notes", "")).strip():
+        fields.append(("Notas", item.get("notes", "")))
+    parts = [
+        f"<span>{label}: {html.escape(str(value).strip())}</span>"
+        for label, value in fields
+        if str(value or "").strip()
+    ]
+    return "".join(parts)
+
+
+def render_portal_exercise_item(item: dict, week_index: int, day_index: int, item_index: int, sub_index: int | None = None) -> str:
+    exercise = html.escape(str(item.get("exercise", "")).strip() or "Ejercicio")
+    status_badge, status_class = portal_item_status(item)
+    status_note = html.escape(str(item.get("status_note", "")).strip())
+    student_note = html.escape(str(item.get("student_note", "")).strip())
+    sub_input = ""
+    if sub_index is not None:
+        sub_input = f'                <input type="hidden" name="sub_item" value="{sub_index}">'
+    return "\n".join(
+        [
+            f'            <div class="plan-item portal-item {status_class}">',
+            '              <div class="portal-item-head">',
+            f"                <h4>{exercise}</h4>",
+            f'                <span class="item-status {status_class}">{status_badge}</span>',
+            "              </div>",
+            f'              <div class="plan-meta">{portal_item_meta_html(item)}</div>',
+            f'              <p class="item-status-note"{"" if status_note else " hidden"}>{status_note}</p>',
+            '              <form class="item-status-form" action="/portal/item/update" method="post" data-portal-item-form>',
+            f'                <input type="hidden" name="week" value="{week_index}">',
+            f'                <input type="hidden" name="day" value="{day_index}">',
+            f'                <input type="hidden" name="item" value="{item_index}">',
+            sub_input,
+            '                <div class="status-buttons">',
+            f'                  <button class="status-button done{" is-active" if status_class == "done" else ""}" type="submit" name="status" value="done">Hecho</button>',
+            f'                  <button class="status-button missed{" is-active" if status_class == "missed" else ""}" type="submit" name="status" value="missed">Fallé</button>',
+            "                </div>",
+            f'                <input class="status-note" name="status_note" type="text" placeholder="Motivo (opcional)" value="{status_note}">',
+            f'                <textarea class="day-feedback" name="student_note" rows="2" placeholder="Pesos usados / sensaciones">{student_note}</textarea>',
+            '                <small class="portal-save-state" aria-live="polite"></small>',
+            '                <button class="btn glass ghost small" type="submit">Guardar</button>',
+            "              </form>",
+            "            </div>",
+        ]
+    )
+
+
+def render_portal_plan_item(item: dict, week_index: int, day_index: int, item_index: int) -> str:
+    item_type = normalize_training_block_type(item.get("type", ""))
+    if item_type in PLAN_BLOCK_TYPES:
+        label = "EMOM" if item_type == "emom" else ("Set unbroken" if item_type == "unbroken" else "Superserie")
+        name = html.escape(str(item.get("name", "")).strip() or label)
+        block_meta = portal_block_meta_html(item)
+        exercises = item.get("exercises")
+        if not isinstance(exercises, list):
+            exercises = []
+        exercise_html = []
+        for sub_index, sub_item in enumerate(exercises, start=1):
+            if not isinstance(sub_item, dict):
+                continue
+            exercise_html.append(render_portal_exercise_item(sub_item, week_index, day_index, item_index, sub_index))
+        if not exercise_html:
+            exercise_html.append('<p class="plan-empty">Bloque sin ejercicios.</p>')
+        return "\n".join(
+            [
+                f'            <section class="portal-block portal-block-{item_type}">',
+                '              <div class="portal-block-head">',
+                f'                <span class="portal-block-badge">{label}</span>',
+                f'                <h4>{name}</h4>',
+                "              </div>",
+                f'              <div class="plan-meta portal-block-meta">{block_meta}</div>' if block_meta else "",
+                '              <div class="portal-block-items">',
+                "\n".join(exercise_html),
+                "              </div>",
+                "            </section>",
+            ]
+        )
+    return render_portal_exercise_item(item, week_index, day_index, item_index)
 
 
 def render_training_plan(plan: dict, active_week: int | None = None) -> str:
@@ -2335,75 +2605,17 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
                 for item_index, item in enumerate(items, start=1):
                     if not isinstance(item, dict):
                         continue
-                    exercise = html.escape(item.get("exercise", ""))
-                    sets = html.escape(item.get("sets", ""))
-                    reps = html.escape(item.get("reps", ""))
-                    weight = html.escape(item.get("weight", ""))
-                    rest = html.escape(item.get("rest", ""))
-                    notes = html.escape(item.get("notes", ""))
-                    status = str(item.get("status", "")).strip()
-                    status_note = html.escape(item.get("status_note", ""))
-                    student_note = html.escape(item.get("student_note", ""))
-                    status_badge = "Pendiente"
-                    status_class = "pending"
-                    if status == "done":
-                        status_badge = "Completado"
-                        status_class = "done"
-                    elif status == "missed":
-                        status_badge = "Fallado"
-                        status_class = "missed"
-                    meta_parts = []
-                    if sets:
-                        meta_parts.append(f"<span>Series: {sets}</span>")
-                    if reps:
-                        meta_parts.append(f"<span>Reps: {reps}</span>")
-                    if weight:
-                        meta_parts.append(f"<span>Peso: {weight}</span>")
-                    if rest:
-                        meta_parts.append(f"<span>Descanso: {rest}</span>")
-                    if notes:
-                        meta_parts.append(f"<span>Notas: {notes}</span>")
-                    meta_html = "".join(meta_parts) if meta_parts else "<span>Trabajo técnico.</span>"
-                    parts.append(f'            <div class="plan-item portal-item {status_class}">')
-                    parts.append('              <div class="portal-item-head">')
-                    parts.append(f"                <h4>{exercise or 'Ejercicio'}</h4>")
-                    parts.append(f'                <span class="item-status {status_class}">{status_badge}</span>')
-                    parts.append("              </div>")
-                    parts.append(f'              <div class="plan-meta">{meta_html}</div>')
-                    if status_note:
-                        parts.append(f'              <p class="item-status-note">{status_note}</p>')
-                    parts.append('              <form class="item-status-form" action="/portal/item/update" method="post">')
-                    parts.append(f'                <input type="hidden" name="week" value="{week_index}">')
-                    parts.append(f'                <input type="hidden" name="day" value="{day_index}">')
-                    parts.append(f'                <input type="hidden" name="item" value="{item_index}">')
-                    parts.append('                <div class="status-buttons">')
-                    parts.append(
-                        f'                  <button class="status-button done{" is-active" if status == "done" else ""}" type="submit" name="status" value="done">Hecho</button>'
-                    )
-                    parts.append(
-                        f'                  <button class="status-button missed{" is-active" if status == "missed" else ""}" type="submit" name="status" value="missed">Fallé</button>'
-                    )
-                    parts.append("                </div>")
-                    parts.append(
-                        f'                <input class="status-note" name="status_note" type="text" placeholder="Motivo (opcional)" value="{status_note}">'
-                    )
-                    parts.append(
-                        f'                <textarea class="day-feedback" name="student_note" rows="2" placeholder="Pesos usados / sensaciones">{student_note}</textarea>'
-                    )
-                    parts.append(
-                        '                <button class="btn glass ghost small" type="submit">Guardar</button>'
-                    )
-                    parts.append("              </form>")
-                    parts.append("            </div>")
+                    parts.append(render_portal_plan_item(item, week_index, day_index, item_index))
                 parts.append("          </div>")
             parts.append('        </div>')
         parts.append("      </div>")
-        parts.append('      <form class="week-summary" action="/portal/week/update" method="post">')
+        parts.append('      <form class="week-summary" action="/portal/week/update" method="post" data-portal-week-form>')
         parts.append(f'        <input type="hidden" name="week" value="{week_index}">')
         parts.append('        <label>Resumen semanal</label>')
         parts.append(
             f'        <textarea name="summary" rows="3" placeholder="Resumen de la semana">{week_summary}</textarea>'
         )
+        parts.append('        <small class="portal-save-state" aria-live="polite"></small>')
         parts.append('        <button class="btn glass ghost small" type="submit">Guardar resumen</button>')
         parts.append("      </form>")
         parts.append("      </div>")
@@ -3213,6 +3425,13 @@ def render_plan_editor(applications: list[dict], selected_user: str, expanded: b
                     item["status"] = ""
                     item["status_note"] = ""
                     item["student_note"] = ""
+                    if normalize_training_block_type(item.get("type", "")) in PLAN_BLOCK_TYPES:
+                        for sub_item in item.get("exercises", []):
+                            if not isinstance(sub_item, dict):
+                                continue
+                            sub_item["status"] = ""
+                            sub_item["status_note"] = ""
+                            sub_item["student_note"] = ""
         plan_data[username] = cleaned_plan
     plan_json = json.dumps(plan_data, ensure_ascii=True).replace("</", "<\\/")
     progress_json = json.dumps(progress_data, ensure_ascii=True).replace("</", "<\\/")
@@ -3244,7 +3463,7 @@ def render_plan_editor(applications: list[dict], selected_user: str, expanded: b
                         "    </div>",
                         "  </div>",
                         '  <div class="plan-day-editor-wrap">',
-                        '    <p class="plan-day-help">Una línea por ejercicio: Ejercicio | Series | Reps | Peso | Descanso | Notas</p>',
+                        '    <p class="plan-day-help">Una línea por ejercicio: Ejercicio | Series | Reps | Peso | Descanso | Notas. Bloques: SUPERSERIE | Nombre | Rondas | Descanso entre | Descanso final; EMOM | Nombre | Duración | Cada | Descanso final; UNBROKEN | Nombre | Rondas | Descanso final. Pon los ejercicios internos debajo empezando por -.</p>',
                         f'    <textarea class="plan-day-editor" data-field="day-text" name="week{week_index}_day{day_index}_text" rows="8" placeholder="Dominadas | 4 | 8 | 20kg | 90s | Técnica estricta">{day_text}</textarea>',
                         "  </div>",
                         '  <p class="plan-rest-note">Descanso / movilidad</p>',
@@ -3870,23 +4089,65 @@ def parse_sponsor_lines(text: str) -> list[dict]:
 
 def parse_day_items(text: str) -> list[dict]:
     items = []
+    current_block = None
     for line in parse_lines(text):
+        child_line = line.startswith("-")
+        if child_line:
+            line = line[1:].strip()
         parts = [part.strip() for part in line.split("|")]
+        block_type = normalize_training_block_type(parts[0] if parts else "")
+        if block_type in PLAN_BLOCK_TYPES:
+            name = parts[1] if len(parts) > 1 else ""
+            if block_type == "emom":
+                current_block = {
+                    "type": "emom",
+                    "name": name or "EMOM",
+                    "duration": parts[2] if len(parts) > 2 else "",
+                    "interval": parts[3] if len(parts) > 3 else "",
+                    "rest_after": parts[4] if len(parts) > 4 else "",
+                    "notes": parts[5] if len(parts) > 5 else "",
+                    "exercises": [],
+                }
+            elif block_type == "unbroken":
+                current_block = {
+                    "type": "unbroken",
+                    "name": name or "Set unbroken",
+                    "rounds": parts[2] if len(parts) > 2 else "",
+                    "rest_after": parts[3] if len(parts) > 3 else "",
+                    "notes": parts[4] if len(parts) > 4 else "",
+                    "exercises": [],
+                }
+            else:
+                current_block = {
+                    "type": "superset",
+                    "name": name or "Superserie",
+                    "rounds": parts[2] if len(parts) > 2 else "",
+                    "rest_between": parts[3] if len(parts) > 3 else "",
+                    "rest_after": parts[4] if len(parts) > 4 else "",
+                    "notes": parts[5] if len(parts) > 5 else "",
+                    "exercises": [],
+                }
+            items.append(current_block)
+            continue
+
         while len(parts) < 6:
             parts.append("")
         exercise, sets, reps, weight, rest, notes = parts[:6]
         if not exercise:
             continue
-        items.append(
-            {
-                "exercise": exercise,
-                "sets": sets,
-                "reps": reps,
-                "weight": weight,
-                "rest": rest,
-                "notes": notes,
-            }
-        )
+        parsed_item = {
+            "exercise": exercise,
+            "sets": sets,
+            "reps": reps,
+            "weight": weight,
+            "rest": rest,
+            "notes": notes,
+        }
+        if child_line and current_block is not None:
+            current_block["exercises"].append(parsed_item)
+        else:
+            current_block = None
+            items.append(parsed_item)
     return items
 
 
@@ -3919,6 +4180,31 @@ def parse_plan_items_from_form(data: dict[str, str], week_index: int, day_index:
             }
         )
     return items
+
+
+def copy_item_progress_fields(target: dict, source: dict) -> None:
+    for field in ("status", "status_note", "student_note"):
+        if field in source:
+            target[field] = str(source.get(field, "")).strip()
+
+
+def preserve_item_progress(parsed_item: dict, old_item: dict) -> None:
+    parsed_type = normalize_training_block_type(parsed_item.get("type", ""))
+    old_type = normalize_training_block_type(old_item.get("type", ""))
+    if parsed_type in PLAN_BLOCK_TYPES and old_type in PLAN_BLOCK_TYPES:
+        parsed_exercises = parsed_item.get("exercises")
+        old_exercises = old_item.get("exercises")
+        if not isinstance(parsed_exercises, list) or not isinstance(old_exercises, list):
+            return
+        for pos, parsed_sub_item in enumerate(parsed_exercises):
+            if pos >= len(old_exercises):
+                continue
+            old_sub_item = old_exercises[pos]
+            if isinstance(parsed_sub_item, dict) and isinstance(old_sub_item, dict):
+                copy_item_progress_fields(parsed_sub_item, old_sub_item)
+        return
+    if parsed_type not in PLAN_BLOCK_TYPES and old_type not in PLAN_BLOCK_TYPES:
+        copy_item_progress_fields(parsed_item, old_item)
 
 
 def send_email(
@@ -4398,6 +4684,19 @@ class AuraHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def wants_json(self) -> bool:
+        requested_with = self.headers.get("X-Requested-With", "").strip().lower()
+        accept = self.headers.get("Accept", "").lower()
+        return requested_with == "fetch" or "application/json" in accept
+
+    def send_json(self, payload: dict, status: int = HTTPStatus.OK) -> None:
+        encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
     def redirect(self, location: str) -> None:
         self.send_response(HTTPStatus.SEE_OTHER)
         self.send_header("Location", location)
@@ -4469,11 +4768,7 @@ class AuraHandler(SimpleHTTPRequestHandler):
         unique_visit = not visit_token
         if unique_visit:
             visit_token = secrets.token_urlsafe(18)
-        try:
-            increment_visit_stats(unique_visit)
-        except Exception as exc:
-            print(f"Error registrando visita publica: {exc}")
-            return []
+        run_background_job(increment_visit_stats, unique_visit)
         if not unique_visit:
             return []
         return [
@@ -5579,9 +5874,7 @@ class AuraHandler(SimpleHTTPRequestHandler):
                     old_item = old_items[item_pos]
                     if not isinstance(old_item, dict):
                         continue
-                    parsed_item["status"] = str(old_item.get("status", "")).strip()
-                    parsed_item["status_note"] = str(old_item.get("status_note", "")).strip()
-                    parsed_item["student_note"] = str(old_item.get("student_note", "")).strip()
+                    preserve_item_progress(parsed_item, old_item)
                 day["title"] = day_title
                 day["rest"] = rest_flag
                 day["items"] = [] if rest_flag else items
@@ -5640,10 +5933,18 @@ class AuraHandler(SimpleHTTPRequestHandler):
             week_index = int(data.get("week", "0")) - 1
             day_index = int(data.get("day", "0")) - 1
             item_index = int(data.get("item", "0")) - 1
+            sub_index_raw = data.get("sub_item", "").strip()
+            sub_index = int(sub_index_raw) - 1 if sub_index_raw else None
         except ValueError:
+            if self.wants_json():
+                self.send_json({"ok": False, "error": "invalid_index"}, HTTPStatus.BAD_REQUEST)
+                return
             self.redirect("/portal")
             return
         if week_index not in range(4) or day_index not in range(7) or item_index < 0:
+            if self.wants_json():
+                self.send_json({"ok": False, "error": "invalid_index"}, HTTPStatus.BAD_REQUEST)
+                return
             self.redirect("/portal")
             return
         status = data.get("status", "").strip()
@@ -5653,24 +5954,67 @@ class AuraHandler(SimpleHTTPRequestHandler):
         applications = load_applications()
         app = find_application(applications, portal_user)
         if not app:
+            if self.wants_json():
+                self.send_json({"ok": False, "error": "student_not_found"}, HTTPStatus.NOT_FOUND)
+                return
             self.redirect("/portal")
             return
         plan = normalize_plan(app.get("plan"))
         day = plan["weeks"][week_index]["days"][day_index]
         items = day.get("items", [])
         if item_index >= len(items):
+            if self.wants_json():
+                self.send_json({"ok": False, "error": "item_not_found"}, HTTPStatus.NOT_FOUND)
+                return
             self.redirect(f"/portal?week={week_index + 1}#week{week_index + 1}")
             return
         item = items[item_index]
         if not isinstance(item, dict):
+            if self.wants_json():
+                self.send_json({"ok": False, "error": "item_not_found"}, HTTPStatus.NOT_FOUND)
+                return
             self.redirect(f"/portal?week={week_index + 1}#week{week_index + 1}")
             return
+        target_item = item
+        if sub_index is not None:
+            exercises = item.get("exercises")
+            if not isinstance(exercises, list) or sub_index < 0 or sub_index >= len(exercises):
+                if self.wants_json():
+                    self.send_json({"ok": False, "error": "sub_item_not_found"}, HTTPStatus.NOT_FOUND)
+                    return
+                self.redirect(f"/portal?week={week_index + 1}#week{week_index + 1}")
+                return
+            target_item = exercises[sub_index]
+            if not isinstance(target_item, dict):
+                if self.wants_json():
+                    self.send_json({"ok": False, "error": "sub_item_not_found"}, HTTPStatus.NOT_FOUND)
+                    return
+                self.redirect(f"/portal?week={week_index + 1}#week{week_index + 1}")
+                return
         if status in {"done", "missed"}:
-            item["status"] = status
-        item["status_note"] = status_note
-        item["student_note"] = student_note
+            target_item["status"] = status
+        target_item["status_note"] = status_note
+        target_item["student_note"] = student_note
         app["plan"] = plan
         save_json(APPLICATIONS_PATH, applications)
+        if self.wants_json():
+            week_stats = compute_week_progress(plan["weeks"][week_index])
+            day_stats = compute_day_progress(day)
+            status_label, status_class = portal_item_status(target_item)
+            self.send_json(
+                {
+                    "ok": True,
+                    "status": target_item.get("status", ""),
+                    "status_label": status_label,
+                    "status_class": status_class,
+                    "status_note": target_item.get("status_note", ""),
+                    "student_note": target_item.get("student_note", ""),
+                    "week": week_index + 1,
+                    "week_stats": week_stats,
+                    "day_stats": day_stats,
+                }
+            )
+            return
         self.redirect(f"/portal?week={week_index + 1}#week{week_index + 1}")
 
     def handle_week_update(self) -> None:
@@ -5683,21 +6027,33 @@ class AuraHandler(SimpleHTTPRequestHandler):
         try:
             week_index = int(data.get("week", "0")) - 1
         except ValueError:
+            if self.wants_json():
+                self.send_json({"ok": False, "error": "invalid_week"}, HTTPStatus.BAD_REQUEST)
+                return
             self.redirect("/portal")
             return
         if week_index not in range(4):
+            if self.wants_json():
+                self.send_json({"ok": False, "error": "invalid_week"}, HTTPStatus.BAD_REQUEST)
+                return
             self.redirect("/portal")
             return
         summary = data.get("summary", "").strip()
         applications = load_applications()
         app = find_application(applications, portal_user)
         if not app:
+            if self.wants_json():
+                self.send_json({"ok": False, "error": "student_not_found"}, HTTPStatus.NOT_FOUND)
+                return
             self.redirect("/portal")
             return
         plan = normalize_plan(app.get("plan"))
         plan["weeks"][week_index]["summary"] = summary
         app["plan"] = plan
         save_json(APPLICATIONS_PATH, applications)
+        if self.wants_json():
+            self.send_json({"ok": True, "week": week_index + 1, "summary": summary})
+            return
         self.redirect(f"/portal?week={week_index + 1}#week{week_index + 1}")
 
     def handle_portal_chat_send(self) -> None:
