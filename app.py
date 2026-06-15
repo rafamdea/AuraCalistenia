@@ -32,6 +32,11 @@ except Exception:  # pragma: no cover - optional dependency until PDF import is 
     PdfReader = None
 
 try:
+    from openpyxl import load_workbook
+except Exception:  # pragma: no cover - optional dependency until Excel import is used
+    load_workbook = None
+
+try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet
@@ -290,57 +295,23 @@ DEFAULT_VIDEOS = [
 ]
 
 DEFAULT_TRAINING_PLAN = {
-    "title": "Plan 4 semanas - primera dominada",
+    "title": "",
     "weeks": [
         {
-            "title": "Semana 01 - Base y técnica",
-            "days": [
-                "Dead hang 4x20s + retracción escapular 3x10",
-                "Remo invertido 4x8 + hollow hold 3x20s",
-                "Asistidas con banda 5x5 + negativas 3x3 (5s)",
-                "Movilidad de hombro y core 15 min",
-                "Isométricos arriba 4x10s + asistidas 4x6",
-                "Remo anillas 4x8 + curl bíceps 3x12",
-                "Descanso activo, caminar 20-30 min",
-            ],
-        },
-        {
-            "title": "Semana 02 - Fuerza inicial",
-            "days": [
-                "Dead hang 4x30s + retracción escapular 4x10",
-                "Remo invertido 4x10 + plancha hollow 3x25s",
-                "Asistidas banda ligera 5x4 + negativas 4x3",
-                "Movilidad y activación de escápulas 15 min",
-                "Isométricos mitad recorrido 4x8s + asistidas 4x5",
-                "Remo supino 4x8 + curl bíceps 3x10",
-                "Descanso activo",
-            ],
-        },
-        {
-            "title": "Semana 03 - Control y potencia",
-            "days": [
-                "Asistidas 6x3 + negativas 4x3 (6s)",
-                "Remo pesado 4x6 + hollow rocks 3x15",
-                "Isométricos arriba 5x8s + clusters 1-1-1",
-                "Movilidad y compensación de hombro",
-                "Asistidas mínima ayuda 5x3 + negativas 3x2",
-                "Remo anillas 4x6 + face pulls 3x12",
-                "Descanso",
-            ],
-        },
-        {
-            "title": "Semana 04 - Primer intento",
-            "days": [
-                "Test dominada + singles limpios 5x1",
-                "Remo moderado 3x8 + core 3x20s",
-                "Singles con pausa arriba 4x1 + negativas 2x2",
-                "Movilidad y respiración",
-                "Intentos controlados + series técnicas",
-                "Trabajo ligero y estiramientos",
-                "Descanso total",
-            ],
-        },
+            "title": "",
+            "summary": "",
+            "days": [{"title": "", "rest": False, "items": []} for _ in range(7)],
+        }
+        for _ in range(4)
     ],
+}
+
+LEGACY_DEFAULT_PLAN_TITLE = "Plan 4 semanas - primera dominada"
+LEGACY_DEFAULT_WEEK_TITLES = {
+    "Semana 01 - Base y técnica",
+    "Semana 02 - Fuerza inicial",
+    "Semana 03 - Control y potencia",
+    "Semana 04 - Primer intento",
 }
 
 SPONSOR_PULLUP_URL = "https://pullup-dip.com/?ref=pullup-dip.com%3Fref%3Drafamdea&utm_source=influenzer"
@@ -1386,6 +1357,12 @@ def normalize_plan_day(day) -> dict:
     }
 
 
+def is_legacy_default_week(week: dict | None) -> bool:
+    if not isinstance(week, dict):
+        return False
+    return str(week.get("title", "")).strip() in LEGACY_DEFAULT_WEEK_TITLES
+
+
 def normalize_plan(plan: dict | None) -> dict:
     default = copy_default_plan()
     if not isinstance(plan, dict):
@@ -1393,33 +1370,27 @@ def normalize_plan(plan: dict | None) -> dict:
     weeks = plan.get("weeks")
     if not isinstance(weeks, list):
         weeks = []
-    default_weeks = default.get("weeks")
-    if not isinstance(default_weeks, list):
-        default_weeks = []
+    plan_title = str(plan.get("title", default.get("title", "")) or "").strip()
+    if plan_title == LEGACY_DEFAULT_PLAN_TITLE:
+        plan_title = ""
     normalized = {
-        "title": plan.get("title") or default.get("title", "Plan 4 semanas"),
+        "title": plan_title,
         "weeks": [],
     }
-    week_count = max(4, len(weeks), len(default_weeks))
+    week_count = max(4, len(weeks))
     for index in range(week_count):
         source_week = weeks[index] if index < len(weeks) and isinstance(weeks[index], dict) else {}
-        default_week = (
-            default_weeks[index] if index < len(default_weeks) and isinstance(default_weeks[index], dict) else {}
-        )
-        title = source_week.get("title") or default_week.get("title", f"Semana {index + 1}")
+        if is_legacy_default_week(source_week):
+            source_week = {}
+        title = str(source_week.get("title", "") or "").strip()
         summary = str(source_week.get("summary", "")).strip()
         days = source_week.get("days")
         if not isinstance(days, list):
             days = []
-        default_days = default_week.get("days")
-        if not isinstance(default_days, list):
-            default_days = []
         normalized_days = []
-        day_count = max(7, len(days), len(default_days))
+        day_count = max(7, len(days))
         for day_index in range(day_count):
             day_source = days[day_index] if day_index < len(days) else None
-            if day_source is None and day_index < len(default_days):
-                day_source = default_days[day_index]
             normalized_days.append(normalize_plan_day(day_source))
         normalized["weeks"].append({"title": title, "summary": summary, "days": normalized_days})
     return normalized
@@ -1776,9 +1747,12 @@ def build_admin_alert(query: dict[str, list[str]]) -> str:
         "client_exists": "Ese usuario ya existe.",
         "harbiz_imported": "Importación Harbiz completada.",
         "harbiz_empty": "El CSV Harbiz no tenía alumnos válidos.",
-        "training_pdf_imported": "Entrenamiento PDF importado.",
-        "training_pdf_error": "No se pudo interpretar el PDF. Revisa la plantilla estructurada.",
+        "training_pdf_imported": "Entrenamiento importado.",
+        "training_file_imported": "Entrenamiento importado.",
+        "training_pdf_error": "No se pudo interpretar el archivo. Revisa la plantilla estructurada.",
+        "training_file_error": "No se pudo interpretar el archivo. Revisa la plantilla estructurada.",
         "pdf_dependency_missing": "Falta la dependencia de PDF en el servidor. Revisa requirements y redeploy.",
+        "spreadsheet_dependency_missing": "Falta la dependencia de Excel en el servidor. Revisa requirements y redeploy.",
         "comments_pdf_error": "No se pudo generar el PDF de comentarios.",
         "smtp_test_ok": "Prueba SMTP enviada correctamente.",
         "smtp_test_disabled": "SMTP desactivado. Activa AURA_SMTP_ENABLED o define credenciales.",
@@ -2047,7 +2021,7 @@ def build_progress_payload(plan: dict) -> dict:
         week_payload.append(
             {
                 "week": index,
-                "title": week.get("title", f"Semana {index}"),
+                "title": week.get("title") or f"Semana {index}",
                 **stats,
             }
         )
@@ -2323,9 +2297,9 @@ def render_coach_dashboard(applications: list[dict], storage_status: dict) -> st
             "          </form>",
             "        </section>",
             '        <section class="coach-import-card">',
-            "          <h4>Subir entrenamiento por PDF</h4>",
-            '          <p class="admin-note">El PDF debe seguir la plantilla estructurada. Por defecto se añade como nuevas semanas para no pisar el plan actual.</p>',
-            '          <form class="admin-form" action="/admin/plan/import-pdf" method="post" enctype="multipart/form-data">',
+            "          <h4>Subir entrenamiento por Excel</h4>",
+            '          <p class="admin-note">Sube un .xlsx o .csv con la plantilla de columnas. También acepta PDF antiguo, pero Excel es el formato recomendado.</p>',
+            '          <form class="admin-form" action="/admin/plan/import-file" method="post" enctype="multipart/form-data">',
             '            <div class="form-row">',
             '              <div class="form-field">',
             '                <label for="pdf_username">Alumno</label>',
@@ -2340,14 +2314,14 @@ def render_coach_dashboard(applications: list[dict], storage_status: dict) -> st
             "              </div>",
             "            </div>",
             '            <div class="form-field">',
-            '              <label for="training_pdf">PDF de entrenamiento</label>',
-            '              <input id="training_pdf" name="training_pdf" type="file" accept="application/pdf,.pdf" required>',
+            '              <label for="training_file">Excel / CSV de entrenamiento</label>',
+            '              <input id="training_file" name="training_file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/pdf,.pdf" required>',
             "            </div>",
-            f'            <button class="btn glass primary small" type="submit"{pdf_disabled}>Importar PDF</button>',
+            f'            <button class="btn glass primary small" type="submit"{pdf_disabled}>Importar entrenamiento</button>',
             "          </form>",
             '          <details class="pdf-format-help">',
-            "            <summary>Ver plantilla recomendada</summary>",
-            "            <pre>AURA-TRAINING-V1\nALUMNO: usuario_alumno\nPLAN: Bloque fuerza base\nSEMANA: 1 | Semana 1\nOBJETIVO: mejorar dominadas estrictas\nDIA: 1 | Tirón + core\nEJERCICIO: Dominadas estrictas | 5 | 5 | peso corporal | 90s | rango completo\nSUPERSERIE: Tirón técnico | 3 | 45s | 90s | sin perder forma\n- EJERCICIO: Remo australiano | 3 | 10-12 | | 30s | pecho a la barra\n- EJERCICIO: Hollow hold | 3 | 20s | | 30s | abdomen duro\nEMOM: Finisher | 4 min | cada minuto | 2 min | bajar reps si falla técnica\n- EJERCICIO: Dominadas | | 4 | | | minuto impar\n- EJERCICIO: Remo australiano | | 8 | | | minuto par\nUNBROKEN: Resistencia final | 2 | sin romper la serie | 2 min | parar si pierde técnica\n- EJERCICIO: Flexiones | 2 | 20 unbroken | | | pecho cerca del suelo\nINDICACIONES: técnica limpia y sin fallo articular</pre>",
+            "            <summary>Ver columnas exactas para Excel</summary>",
+            "            <pre>ALUMNO,PLAN,SEMANA,TITULO_SEMANA,OBJETIVO_SEMANA,DIA,TITULO_DIA,TIPO,BLOQUE,NOMBRE,SERIES,REPS_TIEMPO,CARGA,DESCANSO,RONDAS,DURACION,INTERVALO,DESCANSO_ENTRE,DESCANSO_FINAL,NOTAS\nporras,Bloque fuerza,3,Semana 3,Mejorar resistencia,1,Tirón,EJERCICIO,,Dominadas estrictas,5,5,peso corporal,90s,,,,,,rango completo\nporras,Bloque fuerza,3,Semana 3,Mejorar resistencia,1,Tirón,SUPERSERIE,,Tirón técnico,,,,,3,,,45s,90s,sin perder forma\nporras,Bloque fuerza,3,Semana 3,Mejorar resistencia,1,Tirón,EJERCICIO,Tirón técnico,Remo australiano,3,10-12,peso corporal,30s,,,,,,pecho a la barra\nporras,Bloque fuerza,3,Semana 3,Mejorar resistencia,1,Tirón,EMOM,,Finisher,,,,,,4 min,1 min,,2 min,bajar reps si falla técnica\nporras,Bloque fuerza,3,Semana 3,Mejorar resistencia,1,Tirón,EJERCICIO,Finisher,Dominadas,1,4,peso corporal,resto del minuto,,,,,,minuto impar\nporras,Bloque fuerza,3,Semana 3,Mejorar resistencia,1,Tirón,UNBROKEN,,Resistencia final,,,,,2,,,,2 min,sin romper la serie\nporras,Bloque fuerza,3,Semana 3,Mejorar resistencia,1,Tirón,EJERCICIO,Resistencia final,Flexiones,2,20 unbroken,peso corporal,,,,,,,pecho cerca del suelo</pre>",
             "          </details>",
             "        </section>",
             "      </div>",
@@ -2655,7 +2629,7 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
     )
     parts = [
         '<div class="training-board glass-card" data-stagger>',
-        f'  <div class="training-head"><h3>{html.escape(normalized.get("title", "Plan de entrenamiento"))}</h3></div>',
+        f'  <div class="training-head"><h3>{html.escape(normalized.get("title") or "Plan de entrenamiento")}</h3></div>',
         '  <div class="training-filter">',
         '    <label for="portal_week_select">Semana</label>',
         '    <select id="portal_week_select">',
@@ -2666,7 +2640,7 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
         '  <div class="training-grid">',
     ]
     for week_index, week in enumerate(normalized.get("weeks", []), start=1):
-        week_title = html.escape(week.get("title", f"Semana {week_index}"))
+        week_title = html.escape(week.get("title") or f"Semana {week_index}")
         week_summary = html.escape(week.get("summary", ""))
         week_stats = compute_week_progress(week)
         hidden_class = ""
@@ -4137,7 +4111,7 @@ def render_admin_page(query: dict[str, list[str]]) -> str:
     content = load_content()
     applications = load_applications()
     storage_status = get_storage_status()
-    plan_expanded = bool(selected_user or status in {"plan_saved", "training_pdf_imported"})
+    plan_expanded = bool(selected_user or status in {"plan_saved", "training_pdf_imported", "training_file_imported"})
     replacements = {
         "ADMIN_MESSAGE": build_admin_alert(query),
         "ADMIN_INICIO_TAB_ACTIVE": "is-active" if section == "inicio" else "",
@@ -4446,6 +4420,199 @@ def split_structured_fields(value: str) -> list[str]:
     return [part.strip() for part in str(value or "").split("|")]
 
 
+def clean_cell_value(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
+
+
+def normalize_column_name(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    ascii_value = normalized.encode("ascii", "ignore").decode("ascii").upper()
+    return re.sub(r"[^A-Z0-9]+", "_", ascii_value).strip("_")
+
+
+def first_row_value(row: dict[str, str], *keys: str) -> str:
+    for key in keys:
+        value = row.get(normalize_column_name(key), "")
+        if str(value).strip():
+            return str(value).strip()
+    return ""
+
+
+def parse_positive_number(value: str) -> int | None:
+    match = re.search(r"\d+", str(value or ""))
+    if not match:
+        return None
+    number = int(match.group(0))
+    return number if number > 0 else None
+
+
+def read_training_spreadsheet_rows(upload: UploadedFile) -> list[dict[str, str]]:
+    suffix = Path(upload.filename or "").suffix.lower()
+    upload.file.seek(0)
+    if suffix == ".csv":
+        raw = upload.file.read()
+        text = raw.decode("utf-8-sig", errors="replace")
+        reader = csv.DictReader(text.splitlines(), delimiter=detect_csv_delimiter(text[:4096]))
+        rows = []
+        for source in reader:
+            row = {normalize_column_name(key): clean_cell_value(value) for key, value in (source or {}).items()}
+            if any(row.values()):
+                rows.append(row)
+        return rows
+    if suffix == ".xlsx":
+        if load_workbook is None:
+            raise RuntimeError("openpyxl no está instalado.")
+        workbook = load_workbook(upload.file, read_only=True, data_only=True)
+        sheet = workbook.active
+        header: list[str] = []
+        rows = []
+        for raw_row in sheet.iter_rows(values_only=True):
+            values = [clean_cell_value(value) for value in raw_row]
+            if not any(values):
+                continue
+            if not header:
+                header = [normalize_column_name(value) for value in values]
+                continue
+            row = {
+                header[index]: values[index] if index < len(values) else ""
+                for index in range(len(header))
+                if header[index]
+            }
+            if any(row.values()):
+                rows.append(row)
+        return rows
+    raise ValueError("Formato de hoja no soportado.")
+
+
+def make_plan_item_from_row(row: dict[str, str]) -> dict:
+    return {
+        "exercise": first_row_value(row, "NOMBRE", "EJERCICIO", "EXERCISE"),
+        "sets": first_row_value(row, "SERIES", "SETS"),
+        "reps": first_row_value(row, "REPS_TIEMPO", "REPS", "REPETICIONES", "TIEMPO"),
+        "weight": first_row_value(row, "CARGA", "PESO", "WEIGHT"),
+        "rest": first_row_value(row, "DESCANSO", "REST"),
+        "notes": first_row_value(row, "NOTAS", "NOTES", "COMENTARIO"),
+    }
+
+
+def make_training_block_from_row(row: dict[str, str], block_type: str) -> dict:
+    label = training_block_label(block_type)
+    return {
+        "type": block_type,
+        "name": first_row_value(row, "NOMBRE", "BLOQUE") or label,
+        "rounds": first_row_value(row, "RONDAS", "ROUNDS"),
+        "duration": first_row_value(row, "DURACION", "DURACIÓN", "DURATION"),
+        "interval": first_row_value(row, "INTERVALO", "CADA", "INTERVAL"),
+        "rest_between": first_row_value(row, "DESCANSO_ENTRE", "DESCANSO_ENTRE_SERIES", "OBJETIVO"),
+        "rest_after": first_row_value(row, "DESCANSO_FINAL", "REST_AFTER"),
+        "notes": first_row_value(row, "NOTAS", "NOTES", "COMENTARIO"),
+        "exercises": [],
+    }
+
+
+def parse_training_spreadsheet(upload: UploadedFile) -> tuple[str, dict]:
+    rows = read_training_spreadsheet_rows(upload)
+    if not rows:
+        raise ValueError("Hoja vacía.")
+    username = ""
+    plan_title = "Plan importado"
+    weeks_by_number: dict[int, dict] = {}
+    current_block_by_day: dict[tuple[int, int], dict] = {}
+    block_by_day_name: dict[tuple[int, int, str], dict] = {}
+
+    def ensure_week(week_number: int, row: dict[str, str]) -> dict:
+        week = weeks_by_number.get(week_number)
+        if week is None:
+            week_title = first_row_value(row, "TITULO_SEMANA", "TÍTULO_SEMANA", "SEMANA_TITULO")
+            week = {"number": week_number, "title": week_title, "summary": "", "days": {}}
+            weeks_by_number[week_number] = week
+        if not week.get("title"):
+            week["title"] = first_row_value(row, "TITULO_SEMANA", "TÍTULO_SEMANA", "SEMANA_TITULO")
+        objective = first_row_value(row, "OBJETIVO_SEMANA", "OBJETIVO", "OBJETIVO_DEL_BLOQUE")
+        if objective and not str(week.get("summary", "")).strip():
+            week["summary"] = objective
+        return week
+
+    def ensure_day(week: dict, day_number: int, row: dict[str, str]) -> dict:
+        days = week.setdefault("days", {})
+        day = days.get(day_number)
+        if day is None:
+            day = {
+                "title": first_row_value(row, "TITULO_DIA", "TÍTULO_DIA", "DIA_TITULO"),
+                "rest": False,
+                "items": [],
+                "status": "",
+                "status_note": "",
+                "feedback": "",
+            }
+            days[day_number] = day
+        if not day.get("title"):
+            day["title"] = first_row_value(row, "TITULO_DIA", "TÍTULO_DIA", "DIA_TITULO")
+        return day
+
+    for row in rows:
+        if not username:
+            username = first_row_value(row, "ALUMNO", "USUARIO")
+        if plan_title == "Plan importado":
+            plan_title = first_row_value(row, "PLAN", "BLOQUE_PLAN", "TITULO") or plan_title
+        week_number = parse_positive_number(first_row_value(row, "SEMANA", "WEEK")) or 1
+        day_number = parse_positive_number(first_row_value(row, "DIA", "DÍA", "DAY")) or 1
+        week = ensure_week(week_number, row)
+        day = ensure_day(week, day_number, row)
+        raw_type = first_row_value(row, "TIPO", "TYPE").upper()
+        block_type = normalize_training_block_type(raw_type)
+        block_name = first_row_value(row, "BLOQUE", "BLOQUE_PADRE")
+        exercise_name = first_row_value(row, "NOMBRE", "EJERCICIO", "EXERCISE")
+        if raw_type in {"DESCANSO", "REST"}:
+            day["rest"] = True
+            day["items"] = []
+            continue
+        if block_type in PLAN_BLOCK_TYPES:
+            block = make_training_block_from_row(row, block_type)
+            day["items"].append(block)
+            key = (week_number, day_number)
+            current_block_by_day[key] = block
+            block_by_day_name[(week_number, day_number, block["name"].strip().lower())] = block
+            continue
+        if not exercise_name:
+            continue
+        item = make_plan_item_from_row(row)
+        target_block = None
+        if block_name:
+            target_block = block_by_day_name.get((week_number, day_number, block_name.strip().lower()))
+        if target_block is None and raw_type in {"EJERCICIO_BLOQUE", "BLOQUE_EJERCICIO", "BLOCK_EXERCISE"}:
+            target_block = current_block_by_day.get((week_number, day_number))
+        if target_block is not None:
+            target_block.setdefault("exercises", []).append(item)
+        else:
+            day["items"].append(item)
+            current_block_by_day.pop((week_number, day_number), None)
+
+    if not weeks_by_number:
+        raise ValueError("No se encontraron semanas.")
+    cleaned_weeks = []
+    for week_number in sorted(weeks_by_number):
+        week = weeks_by_number[week_number]
+        day_map = week.get("days") if isinstance(week.get("days"), dict) else {}
+        max_day = max(7, *(day_map.keys() if day_map else [0]))
+        cleaned_days = []
+        for day_number in range(1, max_day + 1):
+            cleaned_days.append(normalize_plan_day(day_map.get(day_number, {"title": "", "items": []})))
+        cleaned_weeks.append(
+            {
+                "number": week_number,
+                "title": str(week.get("title", "")).strip(),
+                "summary": str(week.get("summary", "")).strip(),
+                "days": cleaned_days,
+            }
+        )
+    return username.strip(), {"title": plan_title, "weeks": cleaned_weeks}
+
+
 def make_plan_item_from_parts(parts: list[str]) -> dict:
     padded = list(parts)
     while len(padded) < 6:
@@ -4459,6 +4626,60 @@ def make_plan_item_from_parts(parts: list[str]) -> dict:
         "rest": rest.strip(),
         "notes": notes.strip(),
     }
+
+
+def is_training_document_control_line(line: str) -> bool:
+    cleaned = str(line or "").strip()
+    if not cleaned:
+        return False
+    upper = cleaned.upper()
+    if upper in {"AURA-TRAINING-V1", "AURA TRAINING V1"}:
+        return True
+    if cleaned.startswith("-"):
+        return True
+    if ":" not in cleaned:
+        return False
+    label = cleaned.split(":", 1)[0]
+    label_key = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode("ascii").strip().upper()
+    if normalize_training_block_type(label_key) in PLAN_BLOCK_TYPES:
+        return True
+    return label_key in {
+        "ALUMNO",
+        "USUARIO",
+        "PLAN",
+        "BLOQUE",
+        "TITULO",
+        "SEMANA",
+        "WEEK",
+        "OBJETIVO",
+        "OBJETIVO DEL BLOQUE",
+        "DIA",
+        "DAY",
+        "DESCANSO",
+        "REST",
+        "INDICACIONES",
+        "INDICACIONES GENERALES",
+        "NOTAS GENERALES",
+        "EJERCICIO",
+        "EXERCISE",
+    }
+
+
+def compact_training_document_lines(text: str) -> list[str]:
+    logical_lines: list[str] = []
+    for raw_line in str(text or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if re.fullmatch(r"P[aá]gina\s+\d+", line, flags=re.IGNORECASE):
+            continue
+        if line.upper().startswith("AURA CALISTENIA - AURA-TRAINING-V1"):
+            continue
+        if is_training_document_control_line(line) or not logical_lines:
+            logical_lines.append(line)
+        else:
+            logical_lines[-1] = f"{logical_lines[-1]} {line}".strip()
+    return logical_lines
 
 
 def parse_training_document_text(text: str) -> tuple[str, dict]:
@@ -4486,7 +4707,7 @@ def parse_training_document_text(text: str) -> tuple[str, dict]:
             current_block = None
         return current_day
 
-    for raw_line in str(text or "").splitlines():
+    for raw_line in compact_training_document_lines(text):
         line = raw_line.strip()
         if not line:
             continue
@@ -4510,9 +4731,11 @@ def parse_training_document_text(text: str) -> tuple[str, dict]:
         if label_key in {"SEMANA", "WEEK"}:
             parts = split_structured_fields(value)
             title = " | ".join([part for part in parts if part]).strip()
+            week_number = len(weeks) + 1
             if parts and parts[0].isdigit():
+                week_number = int(parts[0])
                 title = parts[1] if len(parts) > 1 and parts[1] else f"Semana {parts[0]}"
-            current_week = {"title": title or f"Semana {len(weeks) + 1}", "summary": "", "days": []}
+            current_week = {"number": week_number, "title": title or f"Semana {week_number}", "summary": "", "days": []}
             weeks.append(current_week)
             current_day = None
             current_block = None
@@ -4616,11 +4839,70 @@ def parse_training_document_text(text: str) -> tuple[str, dict]:
         cleaned_weeks.append(
             {
                 "title": str(week.get("title", "")).strip() or f"Semana {index}",
+                "number": int(week.get("number", index) or index),
                 "summary": str(week.get("summary", "")).strip(),
                 "days": cleaned_days,
             }
         )
     return username.strip(), {"title": plan_title, "weeks": cleaned_weeks}
+
+
+def plan_day_has_content(day: dict) -> bool:
+    if not isinstance(day, dict):
+        return False
+    if str(day.get("title", "")).strip() or bool(day.get("rest")):
+        return True
+    items = day.get("items")
+    if not isinstance(items, list):
+        return False
+    return any(
+        isinstance(item, dict)
+        and (str(item.get("exercise", "")).strip() or normalize_training_block_type(item.get("type", "")) in PLAN_BLOCK_TYPES)
+        for item in items
+    )
+
+
+def plan_week_has_content(week: dict) -> bool:
+    if not isinstance(week, dict):
+        return False
+    if is_legacy_default_week(week):
+        return False
+    if str(week.get("title", "")).strip() or str(week.get("summary", "")).strip():
+        return True
+    days = week.get("days")
+    if not isinstance(days, list):
+        return False
+    return any(plan_day_has_content(day) for day in days)
+
+
+def merge_imported_plan(current_plan: dict, imported_plan: dict) -> dict:
+    merged_plan = normalize_plan(current_plan)
+    imported_weeks = imported_plan.get("weeks", []) if isinstance(imported_plan, dict) else []
+    if not isinstance(imported_weeks, list):
+        imported_weeks = []
+    merged_weeks = merged_plan.setdefault("weeks", [])
+    for imported_week in imported_weeks:
+        if not isinstance(imported_week, dict):
+            continue
+        target_index = None
+        imported_number = parse_positive_number(str(imported_week.get("number", "")))
+        if imported_number and imported_number <= len(merged_weeks):
+            candidate_index = imported_number - 1
+            if not plan_week_has_content(merged_weeks[candidate_index]):
+                target_index = candidate_index
+        if target_index is None:
+            for index, week in enumerate(merged_weeks):
+                if not plan_week_has_content(week):
+                    target_index = index
+                    break
+        if target_index is None:
+            merged_weeks.append(imported_week)
+        else:
+            merged_weeks[target_index] = imported_week
+    imported_title = str(imported_plan.get("title", "") if isinstance(imported_plan, dict) else "").strip()
+    if imported_title:
+        merged_plan["title"] = imported_title
+    return normalize_plan(merged_plan)
 
 
 def extract_pdf_text(upload: UploadedFile) -> str:
@@ -4632,6 +4914,16 @@ def extract_pdf_text(upload: UploadedFile) -> str:
     for page in reader.pages:
         lines.append(page.extract_text() or "")
     return "\n".join(lines).strip()
+
+
+def parse_training_upload(upload: UploadedFile) -> tuple[str, dict]:
+    suffix = Path(upload.filename or "").suffix.lower()
+    if suffix in {".xlsx", ".csv"}:
+        return parse_training_spreadsheet(upload)
+    if suffix == ".pdf":
+        text = extract_pdf_text(upload)
+        return parse_training_document_text(text)
+    raise ValueError("Formato no soportado.")
 
 
 def detect_csv_delimiter(sample: str) -> str:
@@ -5886,8 +6178,8 @@ class AuraHandler(SimpleHTTPRequestHandler):
             self.handle_plan_update()
             return
 
-        if path == "/admin/plan/import-pdf":
-            self.handle_plan_import_pdf()
+        if path in {"/admin/plan/import-pdf", "/admin/plan/import-file"}:
+            self.handle_plan_import_file()
             return
 
         if path == "/admin/import/harbiz":
@@ -6611,11 +6903,11 @@ class AuraHandler(SimpleHTTPRequestHandler):
         save_json(APPLICATIONS_PATH, applications)
         self.admin_redirect("harbiz_imported")
 
-    def handle_plan_import_pdf(self) -> None:
+    def handle_plan_import_file(self) -> None:
         data, files = parse_post_data(self)
         username = data.get("username", "").strip()
         mode = data.get("mode", "append").strip()
-        upload = files.get("training_pdf")
+        upload = files.get("training_file") or files.get("training_pdf")
         if not username or not upload:
             self.admin_redirect("error")
             return
@@ -6625,17 +6917,16 @@ class AuraHandler(SimpleHTTPRequestHandler):
             self.admin_redirect("error")
             return
         try:
-            text = extract_pdf_text(upload)
-        except RuntimeError:
-            self.admin_redirect("pdf_dependency_missing")
+            document_username, imported_plan = parse_training_upload(upload)
+        except RuntimeError as error:
+            message = str(error).lower()
+            if "openpyxl" in message:
+                self.admin_redirect("spreadsheet_dependency_missing")
+            else:
+                self.admin_redirect("pdf_dependency_missing")
             return
         except Exception:
-            self.admin_redirect("training_pdf_error")
-            return
-        try:
-            document_username, imported_plan = parse_training_document_text(text)
-        except Exception:
-            self.admin_redirect("training_pdf_error")
+            self.admin_redirect("training_file_error")
             return
         if document_username and document_username.strip().lower() != username.strip().lower():
             # El selector del admin manda: el texto del PDF solo sirve de comprobación humana.
@@ -6647,18 +6938,12 @@ class AuraHandler(SimpleHTTPRequestHandler):
                 backups = []
             backups.append({"created_at": int(time.time()), "plan": current_plan})
             app["plan_backups"] = backups[-5:]
-            app["plan"] = imported_plan
+            app["plan"] = normalize_plan(imported_plan)
         else:
-            merged_plan = normalize_plan(current_plan)
-            imported_weeks = imported_plan.get("weeks", [])
-            if not isinstance(imported_weeks, list):
-                imported_weeks = []
-            merged_plan["title"] = imported_plan.get("title") or merged_plan.get("title") or "Plan de entrenamiento"
-            merged_plan["weeks"].extend(imported_weeks)
-            app["plan"] = normalize_plan(merged_plan)
+            app["plan"] = merge_imported_plan(current_plan, imported_plan)
         save_json(APPLICATIONS_PATH, applications)
         plan_param = urllib.parse.quote(username)
-        self.redirect(f"/admin?admin_section=portal&status=training_pdf_imported&plan_user={plan_param}#plan")
+        self.redirect(f"/admin?admin_section=portal&status=training_file_imported&plan_user={plan_param}#plan")
 
     def handle_plan_update(self) -> None:
         data, _ = parse_post_data(self)
