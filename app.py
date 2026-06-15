@@ -2621,25 +2621,46 @@ def render_portal_plan_item(item: dict, week_index: int, day_index: int, item_in
 
 def render_training_plan(plan: dict, active_week: int | None = None) -> str:
     normalized = normalize_plan(plan)
-    week_count = len(normalized.get("weeks", []))
+    all_weeks = normalized.get("weeks", [])
+    if not isinstance(all_weeks, list):
+        all_weeks = []
+    visible_weeks = [
+        (index, week)
+        for index, week in enumerate(all_weeks, start=1)
+        if isinstance(week, dict) and plan_week_has_content(week)
+    ]
+    week_count = len(all_weeks)
     if active_week is None or active_week < 1 or active_week > week_count:
         active_week = None
     week_options = "\n".join(
-        [f'      <option value="{index}">Semana {index}</option>' for index in range(1, week_count + 1)]
+        [f'      <option value="{index}">Semana {index}</option>' for index, _week in visible_weeks]
     )
     parts = [
         '<div class="training-board glass-card" data-stagger>',
         f'  <div class="training-head"><h3>{html.escape(normalized.get("title") or "Plan de entrenamiento")}</h3></div>',
-        '  <div class="training-filter">',
-        '    <label for="portal_week_select">Semana</label>',
-        '    <select id="portal_week_select">',
-        '      <option value="all">Todas</option>',
-        week_options,
-        "    </select>",
-        "  </div>",
-        '  <div class="training-grid">',
     ]
-    for week_index, week in enumerate(normalized.get("weeks", []), start=1):
+    if not visible_weeks:
+        parts.extend(
+            [
+                '  <p class="plan-empty">Todavía no hay entrenamientos cargados.</p>',
+                "</div>",
+                '<input type="hidden" id="portal_week_current" value="all">',
+            ]
+        )
+        return "\n".join(parts)
+    parts.extend(
+        [
+            '  <div class="training-filter">',
+            '    <label for="portal_week_select">Semana</label>',
+            '    <select id="portal_week_select">',
+            '      <option value="all">Todas</option>',
+            week_options,
+            "    </select>",
+            "  </div>",
+            '  <div class="training-grid">',
+        ]
+    )
+    for week_index, week in visible_weeks:
         week_title = html.escape(week.get("title") or f"Semana {week_index}")
         week_summary = html.escape(week.get("summary", ""))
         week_stats = compute_week_progress(week)
@@ -2681,11 +2702,15 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
         parts.append("      </div>")
         parts.append('      <div class="day-grid">')
         days = week.get("days") or []
+        rendered_days = 0
         for day_index, day_text in enumerate(days, start=1):
+            if isinstance(day_text, dict) and not plan_day_has_content(day_text):
+                continue
             day_title = html.escape(day_text.get("title", "")) if isinstance(day_text, dict) else ""
             rest_flag = bool(day_text.get("rest")) if isinstance(day_text, dict) else False
             day_label = day_title or DAY_LABELS[(day_index - 1) % len(DAY_LABELS)]
             day_stats = compute_day_progress(day_text if isinstance(day_text, dict) else {})
+            rendered_days += 1
             parts.append('        <div class="day-card">')
             parts.append('          <div class="day-card-head">')
             parts.append(f'            <span class="day-label">Día {day_index}</span>')
@@ -2698,8 +2723,6 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
             if rest_flag or not isinstance(items, list) or not items:
                 parts.append('          <p class="plan-empty">Descanso o movilidad.</p>')
             if not rest_flag and isinstance(items, list) and items:
-                if len(items) > 1:
-                    parts.append('          <div class="portal-scroll-hint">Desliza para ver todos los ejercicios en orden</div>')
                 parts.append('          <div class="plan-items portal-items-row">')
                 for item_index, item in enumerate(items, start=1):
                     if not isinstance(item, dict):
@@ -2707,6 +2730,8 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
                     parts.append(render_portal_plan_item(item, week_index, day_index, item_index))
                 parts.append("          </div>")
             parts.append('        </div>')
+        if rendered_days == 0:
+            parts.append('        <p class="plan-empty">Semana sin entrenamientos cargados todavía.</p>')
         parts.append("      </div>")
         parts.append('      <form class="week-summary" action="/portal/week/update" method="post" data-portal-week-form>')
         parts.append(f'        <input type="hidden" name="week" value="{week_index}">')
@@ -2917,7 +2942,7 @@ def render_password_reset_page(query: dict[str, list[str]]) -> str:
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260303-2\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260615-portal-vertical\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -2940,7 +2965,7 @@ def render_password_reset_page(query: dict[str, list[str]]) -> str:
             "    <main class=\"section\">",
             f"      {card}",
             "    </main>",
-            "    <script src=\"/script.js?v=20260303-2\"></script>",
+            "    <script src=\"/script.js?v=20260615-portal-vertical\"></script>",
             "  </body>",
             "</html>",
         ]
@@ -2959,7 +2984,7 @@ def render_review_page(card_html: str, page_title: str = "Revisar solicitud - Au
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260303-2\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260615-portal-vertical\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -2982,7 +3007,7 @@ def render_review_page(card_html: str, page_title: str = "Revisar solicitud - Au
             "    <main class=\"section\">",
             f"      {card_html}",
             "    </main>",
-            "    <script src=\"/script.js?v=20260303-2\"></script>",
+            "    <script src=\"/script.js?v=20260615-portal-vertical\"></script>",
             "  </body>",
             "</html>",
         ]
@@ -4144,7 +4169,7 @@ def render_login_page(error: str | None = None) -> str:
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260303-2\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260615-portal-vertical\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -4179,7 +4204,7 @@ def render_login_page(error: str | None = None) -> str:
             "        </form>",
             "      </div>",
             "    </main>",
-            "    <script src=\"/script.js?v=20260303-2\"></script>",
+            "    <script src=\"/script.js?v=20260615-portal-vertical\"></script>",
             "  </body>",
             "</html>",
         ]

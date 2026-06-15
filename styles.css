@@ -917,14 +917,12 @@ h3 {
 }
 
 .video-arena.is-scrollable-track.can-scroll-right,
-.progression-grid.is-scrollable-track.can-scroll-right,
-.portal-items-row.is-scrollable-track.can-scroll-right {
+.progression-grid.is-scrollable-track.can-scroll-right {
   background-image: linear-gradient(270deg, rgba(74, 241, 173, 0.2), rgba(74, 241, 173, 0));
 }
 
 .video-arena.is-scrollable-track.can-scroll-left,
-.progression-grid.is-scrollable-track.can-scroll-left,
-.portal-items-row.is-scrollable-track.can-scroll-left {
+.progression-grid.is-scrollable-track.can-scroll-left {
   box-shadow: inset 16px 0 14px -14px rgba(74, 241, 173, 0.22);
 }
 
@@ -1411,13 +1409,13 @@ h3 {
 
 .portal-item {
   gap: 10px;
+  width: 100%;
 }
 
 .portal-block {
   display: grid;
   gap: 12px;
-  flex: 0 0 min(100%, 860px);
-  width: min(100%, 860px);
+  width: 100%;
   padding: 14px;
   border-radius: 18px;
   border: 1px solid rgba(74, 241, 173, 0.24);
@@ -1481,23 +1479,6 @@ h3 {
   font-size: 0.72rem;
 }
 
-.portal-scroll-hint {
-  display: none;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.68rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
-}
-
-.portal-scroll-hint::before {
-  content: "↔";
-  font-size: 0.9rem;
-  line-height: 1;
-  color: rgba(74, 241, 173, 0.95);
-}
-
 .horizontal-drag-hint {
   display: none;
   align-items: center;
@@ -1537,39 +1518,29 @@ h3 {
 }
 
 .portal-items-row {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: stretch;
+  display: grid;
   gap: 12px;
   position: relative;
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  overflow-x: auto;
-  padding: 2px 18px 10px 2px;
+  overflow: visible;
+  padding: 0;
   scroll-snap-type: none;
-  scroll-padding-left: 2px;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
 }
 
 .portal-items-row .portal-item {
-  flex: 0 0 clamp(320px, 30vw, 420px);
-  width: clamp(320px, 30vw, 420px);
+  width: 100%;
   min-width: 0;
-  scroll-snap-align: start;
 }
 
 .video-arena.is-scrollable-track,
-.progression-grid.is-scrollable-track,
-.portal-items-row.is-scrollable-track {
+.progression-grid.is-scrollable-track {
   cursor: grab;
 }
 
 .video-arena.is-pointer-dragging,
-.progression-grid.is-pointer-dragging,
-.portal-items-row.is-pointer-dragging {
+.progression-grid.is-pointer-dragging {
   cursor: grabbing;
   user-select: none;
 }
@@ -1585,10 +1556,16 @@ h3 {
 }
 
 .portal-item-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
+}
+
+.portal-item-head h4 {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .item-status {
@@ -1618,6 +1595,21 @@ h3 {
 .item-status-form {
   display: grid;
   gap: 8px;
+}
+
+.item-status-form .status-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.item-status-form .status-note,
+.item-status-form .day-feedback {
+  width: 100%;
+}
+
+.item-status-form .btn {
+  justify-self: start;
 }
 
 .item-status-note {
@@ -2161,21 +2153,18 @@ h3 {
 }
 
 .progression-grid::-webkit-scrollbar,
-.day-grid::-webkit-scrollbar,
-.portal-items-row::-webkit-scrollbar {
+.day-grid::-webkit-scrollbar {
   height: 6px;
 }
 
 .progression-grid::-webkit-scrollbar-track,
-.day-grid::-webkit-scrollbar-track,
-.portal-items-row::-webkit-scrollbar-track {
+.day-grid::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 999px;
 }
 
 .progression-grid::-webkit-scrollbar-thumb,
-.day-grid::-webkit-scrollbar-thumb,
-.portal-items-row::-webkit-scrollbar-thumb {
+.day-grid::-webkit-scrollbar-thumb {
   background: rgba(74, 241, 173, 0.35);
   border-radius: 999px;
 }
@@ -3520,8 +3509,7 @@ h3 {
     scrollbar-width: auto;
   }
 
-  .day-grid.is-scrollable-track,
-  .portal-items-row.is-scrollable-track {
+  .day-grid.is-scrollable-track {
     background-repeat: no-repeat;
     background-position: right center;
     background-size: 42px 100%;
@@ -3544,13 +3532,11 @@ h3 {
     opacity: 0.92;
   }
 
-  .day-grid.is-scrollable-track.can-scroll-right,
-  .portal-items-row.is-scrollable-track.can-scroll-right {
+  .day-grid.is-scrollable-track.can-scroll-right {
     background-image: linear-gradient(270deg, rgba(74, 241, 173, 0.22), rgba(74, 241, 173, 0));
   }
 
-  .day-grid.is-scrollable-track.can-scroll-left,
-  .portal-items-row.is-scrollable-track.can-scroll-left {
+  .day-grid.is-scrollable-track.can-scroll-left {
     box-shadow: inset 16px 0 14px -14px rgba(74, 241, 173, 0.24);
   }
 
@@ -3560,31 +3546,17 @@ h3 {
   }
 
   .portal-items-row {
-    overflow-x: auto;
-    padding-bottom: 8px;
-    padding-right: 12%;
-    scroll-snap-type: x mandatory;
-    scroll-padding-left: 2px;
-    overscroll-behavior-x: contain;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-  }
-
-  .portal-scroll-hint {
-    display: inline-flex;
-    margin-bottom: 2px;
+    overflow: visible;
+    padding: 0;
+    scroll-snap-type: none;
   }
 
   .portal-items-row .portal-item {
-    flex-basis: 88%;
-    width: 88%;
-    scroll-snap-align: start;
+    width: 100%;
   }
 
   .portal-items-row .portal-block {
-    flex-basis: 94%;
-    width: 94%;
-    scroll-snap-align: start;
+    width: 100%;
   }
 
   .portal-block {
@@ -3896,16 +3868,11 @@ h3 {
   }
 
   .portal-items-row {
-    padding-right: 10%;
+    padding-right: 0;
   }
 
   .portal-items-row .portal-item {
-    flex-basis: 90%;
-    width: 90%;
-  }
-
-  .portal-scroll-hint {
-    display: inline-flex;
+    width: 100%;
   }
 
   .training-week-summary {

@@ -226,8 +226,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateCue();
   };
 
-  const horizontalTrackSelector =
-    ".video-arena, .progression-grid, .day-grid, .portal-items-row";
+  const horizontalTrackSelector = ".video-arena, .progression-grid";
   const horizontalTrackShellClass = "horizontal-track-shell";
 
   const ensureHorizontalTrackShells = () => {
@@ -244,7 +243,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const ensureHorizontalTrackHints = () => {
-    document.querySelectorAll(".portal-items-row").forEach((track) => {
+    document.querySelectorAll(".portal-items-row[data-horizontal-track]").forEach((track) => {
       const parent = track.parentElement;
       if (!parent || !parent.classList.contains(horizontalTrackShellClass)) {
         return;
@@ -290,7 +289,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const syncHorizontalDragHints = () => {
     document
-      .querySelectorAll(".video-arena, .progression-grid, .day-grid, .portal-items-row")
+      .querySelectorAll(horizontalTrackSelector)
       .forEach((track) => {
         updateHorizontalTrackState(track);
       });
@@ -298,7 +297,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const bindHorizontalTrackHintEvents = () => {
     document
-      .querySelectorAll(".video-arena, .progression-grid, .day-grid, .portal-items-row")
+      .querySelectorAll(horizontalTrackSelector)
       .forEach((track) => {
         if (track.dataset.hintBound === "1") {
           return;
@@ -422,7 +421,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     visibleVideos.forEach((video) => {
       const track =
-        video.closest(".video-arena, .progression-grid, .day-grid, .portal-items-row") ||
+        video.closest(".video-arena, .progression-grid") ||
         video.parentElement ||
         document.body;
       const key = track;
@@ -565,9 +564,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     return shell.querySelector(horizontalTrackSelector);
   };
-  const publicMediaTrackSelector = ".video-arena, .progression-grid, .portal-items-row";
+  const publicMediaTrackSelector = ".video-arena, .progression-grid";
   const wheelAssistTrackSelector = publicMediaTrackSelector;
-  const pointerDragTrackSelector = ".video-arena, .progression-grid, .portal-items-row";
+  const pointerDragTrackSelector = ".video-arena, .progression-grid";
   const textEntryTrackTargetSelector = "input, textarea, select";
   const trackScrollState = new WeakMap();
   const getTrackScrollState = (track) => {
