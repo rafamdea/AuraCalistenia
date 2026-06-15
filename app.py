@@ -3506,6 +3506,159 @@ def render_index(query: dict[str, list[str]], cookie_header: str | None) -> str:
     return render_template(INDEX_TEMPLATE, replacements)
 
 
+def training_block_label(item_type: str) -> str:
+    normalized = normalize_training_block_type(item_type)
+    if normalized == "emom":
+        return "EMOM"
+    if normalized == "unbroken":
+        return "Set unbroken"
+    return "Superserie"
+
+
+def render_plan_exercise_editor(prefix: str, item: dict | None = None, compact: bool = False) -> str:
+    item = item if isinstance(item, dict) else {}
+    wrapper_class = "coachapp-subexercise-row" if compact else "coachapp-exercise-row coachapp-plan-item"
+    type_input = "" if compact else f'<input type="hidden" name="{prefix}_type" value="exercise">'
+    remove_label = "Quitar ejercicio"
+    return "\n".join(
+        [
+            f'<div class="{wrapper_class}" data-plan-item-type="exercise">',
+            type_input,
+            '  <div class="coachapp-field is-main">',
+            "    <label>Ejercicio</label>",
+            f'    <input name="{prefix}_exercise" type="text" value="{html.escape(str(item.get("exercise", "")).strip())}" placeholder="Nombre del ejercicio">',
+            "  </div>",
+            '  <div class="coachapp-field">',
+            "    <label>Series</label>",
+            f'    <input name="{prefix}_sets" type="text" value="{html.escape(str(item.get("sets", "")).strip())}" placeholder="4">',
+            "  </div>",
+            '  <div class="coachapp-field">',
+            "    <label>Reps / tiempo</label>",
+            f'    <input name="{prefix}_reps" type="text" value="{html.escape(str(item.get("reps", "")).strip())}" placeholder="8-10 / 30s">',
+            "  </div>",
+            '  <div class="coachapp-field">',
+            "    <label>Peso</label>",
+            f'    <input name="{prefix}_weight" type="text" value="{html.escape(str(item.get("weight", "")).strip())}" placeholder="Opcional">',
+            "  </div>",
+            '  <div class="coachapp-field">',
+            "    <label>Descanso</label>",
+            f'    <input name="{prefix}_rest" type="text" value="{html.escape(str(item.get("rest", "")).strip())}" placeholder="90s">',
+            "  </div>",
+            '  <div class="coachapp-field is-notes">',
+            "    <label>Notas</label>",
+            f'    <textarea name="{prefix}_notes" rows="2" placeholder="Técnica, objetivo o ajuste">{html.escape(str(item.get("notes", "")).strip())}</textarea>',
+            "  </div>",
+            f'  <button type="button" class="coachapp-icon-button" data-remove-plan-item aria-label="{remove_label}" title="{remove_label}">×</button>',
+            "</div>",
+        ]
+    )
+
+
+def render_plan_block_editor(item: dict, week_index: int, day_index: int, item_index: int) -> str:
+    item_type = normalize_training_block_type(item.get("type", "")) or "superset"
+    label = training_block_label(item_type)
+    prefix = f"week{week_index}_day{day_index}_item{item_index}"
+    name = html.escape(str(item.get("name", "")).strip() or label)
+    rounds = html.escape(str(item.get("rounds", "")).strip())
+    duration = html.escape(str(item.get("duration", "")).strip())
+    interval = html.escape(str(item.get("interval", "")).strip())
+    rest_between = html.escape(str(item.get("rest_between", "")).strip())
+    rest_after = html.escape(str(item.get("rest_after", "")).strip())
+    notes = html.escape(str(item.get("notes", "")).strip())
+    exercises = item.get("exercises") if isinstance(item.get("exercises"), list) else []
+    if not exercises:
+        exercises = [{"exercise": "", "sets": "", "reps": "", "weight": "", "rest": "", "notes": ""}]
+    child_rows = []
+    for sub_index, sub_item in enumerate(exercises, start=1):
+        child_rows.append(render_plan_exercise_editor(f"{prefix}_sub{sub_index}", sub_item, compact=True))
+
+    block_meta = []
+    if item_type == "emom":
+        block_meta.extend(
+            [
+                (
+                    "Duración",
+                    f'<input name="{prefix}_duration" type="text" value="{duration}" placeholder="12 min">',
+                ),
+                (
+                    "Cada",
+                    f'<input name="{prefix}_interval" type="text" value="{interval}" placeholder="1 min">',
+                ),
+            ]
+        )
+    else:
+        block_meta.append(("Rondas", f'<input name="{prefix}_rounds" type="text" value="{rounds}" placeholder="3">'))
+    if item_type == "superset":
+        block_meta.append(
+            (
+                "Descanso entre vueltas",
+                f'<input name="{prefix}_rest_between" type="text" value="{rest_between}" placeholder="60s">',
+            )
+        )
+    elif item_type == "unbroken":
+        block_meta.append(
+            (
+                "Objetivo",
+                f'<input name="{prefix}_rest_between" type="text" value="{rest_between}" placeholder="Sin romper / tiempo límite">',
+            )
+        )
+    else:
+        block_meta.append(
+            (
+                "Descanso entre rondas",
+                f'<input name="{prefix}_rest_between" type="text" value="{rest_between}" placeholder="Si aplica">',
+            )
+        )
+    block_meta.append(
+        (
+            "Descanso final",
+            f'<input name="{prefix}_rest_after" type="text" value="{rest_after}" placeholder="Antes del siguiente bloque">',
+        )
+    )
+    meta_html = "\n".join(
+        "\n".join(
+            [
+                '<div class="coachapp-field">',
+                f"  <label>{field_label}</label>",
+                f"  {field_html}",
+                "</div>",
+            ]
+        )
+        for field_label, field_html in block_meta
+    )
+    return "\n".join(
+        [
+            f'<section class="coachapp-block-card coachapp-plan-item is-{item_type}" data-plan-item-type="{item_type}">',
+            f'  <input type="hidden" name="{prefix}_type" value="{item_type}">',
+            '  <div class="coachapp-block-head">',
+            f'    <span class="coachapp-block-badge">{label}</span>',
+            '    <div class="coachapp-field is-main">',
+            "      <label>Nombre del bloque</label>",
+            f'      <input name="{prefix}_name" type="text" value="{name}" placeholder="{label}">',
+            "    </div>",
+            f'    <button type="button" class="coachapp-icon-button" data-remove-plan-item aria-label="Quitar {label}" title="Quitar {label}">×</button>',
+            "  </div>",
+            f'  <div class="coachapp-block-meta">{meta_html}</div>',
+            '  <div class="coachapp-field is-notes">',
+            "    <label>Notas del bloque</label>",
+            f'    <textarea name="{prefix}_notes" rows="2" placeholder="Indicaciones generales del bloque">{notes}</textarea>',
+            "  </div>",
+            '  <div class="coachapp-subexercise-list">',
+            "\n".join(child_rows),
+            "  </div>",
+            '  <button type="button" class="btn glass ghost small" data-add-sub-exercise>Añadir ejercicio dentro</button>',
+            "</section>",
+        ]
+    )
+
+
+def render_plan_item_editor(item: dict, week_index: int, day_index: int, item_index: int) -> str:
+    item_type = normalize_training_block_type(item.get("type", "")) if isinstance(item, dict) else ""
+    if item_type in PLAN_BLOCK_TYPES:
+        return render_plan_block_editor(item, week_index, day_index, item_index)
+    return render_plan_exercise_editor(f"week{week_index}_day{day_index}_item{item_index}", item)
+
+
 def render_plan_editor(applications: list[dict], selected_user: str, expanded: bool = False) -> str:
     if not applications:
         return (
@@ -3579,7 +3732,12 @@ def render_plan_editor(applications: list[dict], selected_user: str, expanded: b
             day_title = html.escape(day.get("title", ""))
             rest_flag = "checked" if day.get("rest") else ""
             card_class = "plan-day-card is-rest" if day.get("rest") else "plan-day-card"
-            day_text = html.escape(plan_day_to_text(day))
+            day_items = day.get("items") if isinstance(day.get("items"), list) else []
+            item_editors = []
+            for item_index, item in enumerate(day_items, start=1):
+                if isinstance(item, dict):
+                    item_editors.append(render_plan_item_editor(item, week_index, day_index, item_index))
+            items_html = "\n".join(item_editors) if item_editors else '<p class="plan-empty coachapp-empty">Sin ejercicios todavía.</p>'
             day_cards.append(
                 "\n".join(
                     [
@@ -3596,9 +3754,14 @@ def render_plan_editor(applications: list[dict], selected_user: str, expanded: b
                         '      <button type="button" class="plan-day-clear" aria-label="Vaciar día" title="Vaciar día">🧹</button>',
                         "    </div>",
                         "  </div>",
-                        '  <div class="plan-day-editor-wrap">',
-                        '    <p class="plan-day-help">Una línea por ejercicio: Ejercicio | Series | Reps | Peso | Descanso | Notas. Bloques: SUPERSERIE | Nombre | Rondas | Descanso entre | Descanso final; EMOM | Nombre | Duración | Cada | Descanso final; UNBROKEN | Nombre | Rondas | Descanso final. Pon los ejercicios internos debajo empezando por -.</p>',
-                        f'    <textarea class="plan-day-editor" data-field="day-text" name="week{week_index}_day{day_index}_text" rows="8" placeholder="Dominadas | 4 | 8 | 20kg | 90s | Técnica estricta">{day_text}</textarea>',
+                        f'  <div class="coachapp-items" data-week="{week_index}" data-day="{day_index}">',
+                        items_html,
+                        "  </div>",
+                        '  <div class="coachapp-add-row">',
+                        '    <button type="button" class="btn glass ghost small" data-add-exercise>Añadir ejercicio</button>',
+                        '    <button type="button" class="btn glass ghost small" data-add-block="superset">Superserie</button>',
+                        '    <button type="button" class="btn glass ghost small" data-add-block="emom">EMOM</button>',
+                        '    <button type="button" class="btn glass ghost small" data-add-block="unbroken">Unbroken</button>',
                         "  </div>",
                         '  <p class="plan-rest-note">Descanso / movilidad</p>',
                         "</div>",
@@ -4535,20 +4698,67 @@ def unique_application_username(applications: list[dict], base: str) -> str:
 
 
 def parse_plan_items_from_form(data: dict[str, str], week_index: int, day_index: int) -> list[dict]:
-    pattern = re.compile(
-        rf"week{week_index}_day{day_index}_item(\d+)_(exercise|sets|reps|weight|rest|notes)$"
+    item_pattern = re.compile(
+        rf"week{week_index}_day{day_index}_item(\d+)_(type|exercise|sets|reps|weight|rest|notes|name|rounds|duration|interval|rest_between|rest_after)$"
+    )
+    sub_item_pattern = re.compile(
+        rf"week{week_index}_day{day_index}_item(\d+)_sub(\d+)_(exercise|sets|reps|weight|rest|notes)$"
     )
     items_by_index: dict[int, dict[str, str]] = {}
+    sub_items_by_index: dict[int, dict[int, dict[str, str]]] = {}
     for key, value in data.items():
-        match = pattern.match(key)
-        if not match:
+        item_match = item_pattern.match(key)
+        if item_match:
+            idx = int(item_match.group(1))
+            field = item_match.group(2)
+            items_by_index.setdefault(idx, {})[field] = str(value).strip()
             continue
-        idx = int(match.group(1))
-        field = match.group(2)
-        items_by_index.setdefault(idx, {})[field] = str(value).strip()
+        sub_match = sub_item_pattern.match(key)
+        if sub_match:
+            item_idx = int(sub_match.group(1))
+            sub_idx = int(sub_match.group(2))
+            field = sub_match.group(3)
+            sub_items_by_index.setdefault(item_idx, {}).setdefault(sub_idx, {})[field] = str(value).strip()
+
     items = []
     for idx in sorted(items_by_index):
         item = items_by_index[idx]
+        item_type = normalize_training_block_type(item.get("type", ""))
+        if item_type in PLAN_BLOCK_TYPES:
+            default_name = "EMOM" if item_type == "emom" else ("Set unbroken" if item_type == "unbroken" else "Superserie")
+            exercises = []
+            for sub_idx in sorted(sub_items_by_index.get(idx, {})):
+                sub_item = sub_items_by_index[idx][sub_idx]
+                exercise = sub_item.get("exercise", "").strip()
+                if not exercise:
+                    continue
+                exercises.append(
+                    {
+                        "exercise": exercise,
+                        "sets": sub_item.get("sets", "").strip(),
+                        "reps": sub_item.get("reps", "").strip(),
+                        "weight": sub_item.get("weight", "").strip(),
+                        "rest": sub_item.get("rest", "").strip(),
+                        "notes": sub_item.get("notes", "").strip(),
+                    }
+                )
+            if not exercises and not item.get("name", "").strip():
+                continue
+            items.append(
+                {
+                    "type": item_type,
+                    "name": item.get("name", "").strip() or default_name,
+                    "rounds": item.get("rounds", "").strip(),
+                    "duration": item.get("duration", "").strip(),
+                    "interval": item.get("interval", "").strip(),
+                    "rest_between": item.get("rest_between", "").strip(),
+                    "rest_after": item.get("rest_after", "").strip(),
+                    "notes": item.get("notes", "").strip(),
+                    "exercises": exercises,
+                }
+            )
+            continue
+
         exercise = item.get("exercise", "").strip()
         if not exercise:
             continue

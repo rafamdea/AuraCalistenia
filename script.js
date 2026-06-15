@@ -919,6 +919,217 @@ document.addEventListener("DOMContentLoaded", () => {
         }, []);
     };
 
+    const escapeHtml = (value) =>
+      String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+    const blockLabel = (type) => {
+      const normalized = normalizeBlockType(type);
+      if (normalized === "emom") return "EMOM";
+      if (normalized === "unbroken") return "Set unbroken";
+      return "Superserie";
+    };
+
+    const fieldValue = (root, selector) => {
+      const field = root.querySelector(selector);
+      return field ? String(field.value || "").trim() : "";
+    };
+
+    const compactExerciseTemplate = (prefix, item = {}) => `
+      <div class="coachapp-subexercise-row" data-plan-item-type="exercise">
+        <div class="coachapp-field is-main">
+          <label>Ejercicio</label>
+          <input name="${prefix}_exercise" type="text" value="${escapeHtml(item.exercise)}" placeholder="Nombre del ejercicio">
+        </div>
+        <div class="coachapp-field">
+          <label>Series</label>
+          <input name="${prefix}_sets" type="text" value="${escapeHtml(item.sets)}" placeholder="4">
+        </div>
+        <div class="coachapp-field">
+          <label>Reps / tiempo</label>
+          <input name="${prefix}_reps" type="text" value="${escapeHtml(item.reps)}" placeholder="8-10 / 30s">
+        </div>
+        <div class="coachapp-field">
+          <label>Peso</label>
+          <input name="${prefix}_weight" type="text" value="${escapeHtml(item.weight)}" placeholder="Opcional">
+        </div>
+        <div class="coachapp-field">
+          <label>Descanso</label>
+          <input name="${prefix}_rest" type="text" value="${escapeHtml(item.rest)}" placeholder="90s">
+        </div>
+        <div class="coachapp-field is-notes">
+          <label>Notas</label>
+          <textarea name="${prefix}_notes" rows="2" placeholder="Técnica, objetivo o ajuste">${escapeHtml(item.notes)}</textarea>
+        </div>
+        <button type="button" class="coachapp-icon-button" data-remove-plan-item aria-label="Quitar ejercicio" title="Quitar ejercicio">×</button>
+      </div>
+    `;
+
+    const exerciseTemplate = (week, day, index, item = {}) => {
+      const prefix = `week${week}_day${day}_item${index}`;
+      return `
+        <div class="coachapp-exercise-row coachapp-plan-item" data-plan-item-type="exercise">
+          <input type="hidden" name="${prefix}_type" value="exercise">
+          ${compactExerciseTemplate(prefix, item).replace("coachapp-subexercise-row", "coachapp-exercise-row-inner")}
+        </div>
+      `;
+    };
+
+    const blockMetaTemplate = (prefix, type, item = {}) => {
+      const normalized = normalizeBlockType(type) || "superset";
+      const rows = [];
+      if (normalized === "emom") {
+        rows.push(["Duración", `<input name="${prefix}_duration" type="text" value="${escapeHtml(item.duration)}" placeholder="12 min">`]);
+        rows.push(["Cada", `<input name="${prefix}_interval" type="text" value="${escapeHtml(item.interval)}" placeholder="1 min">`]);
+      } else {
+        rows.push(["Rondas", `<input name="${prefix}_rounds" type="text" value="${escapeHtml(item.rounds)}" placeholder="3">`]);
+      }
+      if (normalized === "superset") {
+        rows.push(["Descanso entre vueltas", `<input name="${prefix}_rest_between" type="text" value="${escapeHtml(item.rest_between)}" placeholder="60s">`]);
+      } else if (normalized === "unbroken") {
+        rows.push(["Objetivo", `<input name="${prefix}_rest_between" type="text" value="${escapeHtml(item.rest_between)}" placeholder="Sin romper / tiempo límite">`]);
+      } else {
+        rows.push(["Descanso entre rondas", `<input name="${prefix}_rest_between" type="text" value="${escapeHtml(item.rest_between)}" placeholder="Si aplica">`]);
+      }
+      rows.push(["Descanso final", `<input name="${prefix}_rest_after" type="text" value="${escapeHtml(item.rest_after)}" placeholder="Antes del siguiente bloque">`]);
+      return rows
+        .map(
+          ([label, input]) => `
+            <div class="coachapp-field">
+              <label>${label}</label>
+              ${input}
+            </div>
+          `
+        )
+        .join("");
+    };
+
+    const blockTemplate = (week, day, index, type, item = {}) => {
+      const normalized = normalizeBlockType(type) || "superset";
+      const prefix = `week${week}_day${day}_item${index}`;
+      const label = blockLabel(normalized);
+      const exercises = Array.isArray(item.exercises) && item.exercises.length ? item.exercises : [{}];
+      return `
+        <section class="coachapp-block-card coachapp-plan-item is-${normalized}" data-plan-item-type="${normalized}">
+          <input type="hidden" name="${prefix}_type" value="${normalized}">
+          <div class="coachapp-block-head">
+            <span class="coachapp-block-badge">${label}</span>
+            <div class="coachapp-field is-main">
+              <label>Nombre del bloque</label>
+              <input name="${prefix}_name" type="text" value="${escapeHtml(item.name || label)}" placeholder="${label}">
+            </div>
+            <button type="button" class="coachapp-icon-button" data-remove-plan-item aria-label="Quitar ${label}" title="Quitar ${label}">×</button>
+          </div>
+          <div class="coachapp-block-meta">${blockMetaTemplate(prefix, normalized, item)}</div>
+          <div class="coachapp-field is-notes">
+            <label>Notas del bloque</label>
+            <textarea name="${prefix}_notes" rows="2" placeholder="Indicaciones generales del bloque">${escapeHtml(item.notes)}</textarea>
+          </div>
+          <div class="coachapp-subexercise-list">
+            ${exercises
+              .map((child, childIndex) => compactExerciseTemplate(`${prefix}_sub${childIndex + 1}`, child))
+              .join("")}
+          </div>
+          <button type="button" class="btn glass ghost small" data-add-sub-exercise>Añadir ejercicio dentro</button>
+        </section>
+      `;
+    };
+
+    const createNodeFromHtml = (html) => {
+      const template = document.createElement("template");
+      template.innerHTML = String(html || "").trim();
+      return template.content.firstElementChild;
+    };
+
+    const nextPlanItemIndex = (dayCard) => {
+      const week = Number(dayCard.dataset.week || 1);
+      const day = Number(dayCard.dataset.day || 1);
+      const pattern = new RegExp(`^week${week}_day${day}_item(\\d+)_type$`);
+      const indexes = Array.from(dayCard.querySelectorAll('.coachapp-items input[name$="_type"]'))
+        .map((field) => {
+          const match = pattern.exec(field.name || "");
+          return match ? Number(match[1]) : 0;
+        })
+        .filter(Boolean);
+      return Math.max(0, ...indexes) + 1;
+    };
+
+    const nextSubExerciseIndex = (blockCard) => {
+      const typeInput = blockCard.querySelector('input[name$="_type"]');
+      const itemPrefix = typeInput ? String(typeInput.name || "").replace(/_type$/, "") : "";
+      const pattern = itemPrefix ? new RegExp(`^${itemPrefix}_sub(\\d+)_exercise$`) : null;
+      const indexes = Array.from(blockCard.querySelectorAll('.coachapp-subexercise-list input[name$="_exercise"]'))
+        .map((field) => {
+          const match = pattern ? pattern.exec(field.name || "") : null;
+          return match ? Number(match[1]) : 0;
+        })
+        .filter(Boolean);
+      return Math.max(0, ...indexes) + 1;
+    };
+
+    const renderDayItems = (dayCard, items = []) => {
+      const container = dayCard.querySelector(".coachapp-items");
+      if (!container) {
+        return;
+      }
+      const week = Number(dayCard.dataset.week || container.dataset.week || 1);
+      const day = Number(dayCard.dataset.day || container.dataset.day || 1);
+      const rows = Array.isArray(items) ? items : [];
+      container.innerHTML = rows.length
+        ? rows
+            .map((item, idx) => {
+              const type = normalizeBlockType(item && item.type);
+              if (["superset", "emom", "unbroken"].includes(type)) {
+                return blockTemplate(week, day, idx + 1, type, item);
+              }
+              return exerciseTemplate(week, day, idx + 1, item || {});
+            })
+            .join("")
+        : '<p class="plan-empty coachapp-empty">Sin ejercicios todavía.</p>';
+    };
+
+    const extractPlanItems = (dayCard) => {
+      return Array.from(dayCard.querySelectorAll(".coachapp-items > .coachapp-plan-item"))
+        .map((node) => {
+          const type = normalizeBlockType(node.dataset.planItemType);
+          if (["superset", "emom", "unbroken"].includes(type)) {
+            const exercises = Array.from(node.querySelectorAll(".coachapp-subexercise-list > .coachapp-subexercise-row"))
+              .map((row) => ({
+                exercise: fieldValue(row, 'input[name$="_exercise"]'),
+                sets: fieldValue(row, 'input[name$="_sets"]'),
+                reps: fieldValue(row, 'input[name$="_reps"]'),
+                weight: fieldValue(row, 'input[name$="_weight"]'),
+                rest: fieldValue(row, 'input[name$="_rest"]'),
+                notes: fieldValue(row, 'textarea[name$="_notes"]'),
+              }))
+              .filter((item) => item.exercise);
+            return {
+              type,
+              name: fieldValue(node, 'input[name$="_name"]') || blockLabel(type),
+              rounds: fieldValue(node, 'input[name$="_rounds"]'),
+              duration: fieldValue(node, 'input[name$="_duration"]'),
+              interval: fieldValue(node, 'input[name$="_interval"]'),
+              rest_between: fieldValue(node, 'input[name$="_rest_between"]'),
+              rest_after: fieldValue(node, 'input[name$="_rest_after"]'),
+              notes: fieldValue(node, 'textarea[name$="_notes"]'),
+              exercises,
+            };
+          }
+          return {
+            exercise: fieldValue(node, 'input[name$="_exercise"]'),
+            sets: fieldValue(node, 'input[name$="_sets"]'),
+            reps: fieldValue(node, 'input[name$="_reps"]'),
+            weight: fieldValue(node, 'input[name$="_weight"]'),
+            rest: fieldValue(node, 'input[name$="_rest"]'),
+            notes: fieldValue(node, 'textarea[name$="_notes"]'),
+          };
+        })
+        .filter((item) => item.exercise || ["superset", "emom", "unbroken"].includes(normalizeBlockType(item.type)));
+    };
+
     const updateRestState = (dayCard) => {
       const restToggle = dayCard.querySelector('[data-field="day-rest"]');
       const isRest = restToggle ? restToggle.checked : false;
@@ -927,6 +1138,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (dayEditor) {
         dayEditor.disabled = isRest;
       }
+      dayCard.querySelectorAll(".coachapp-items input, .coachapp-items textarea, .coachapp-add-row button").forEach((field) => {
+        field.disabled = isRest;
+      });
     };
 
     const extractDayData = (dayCard) => {
@@ -937,7 +1151,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return {
         title: titleInput ? titleInput.value.trim() : "",
         rest: restToggle ? restToggle.checked : false,
-        items: parseDayItemsText(textValue),
+        items: dayEditor ? parseDayItemsText(textValue) : extractPlanItems(dayCard),
       };
     };
 
@@ -957,6 +1171,8 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
           dayEditor.value = itemsToText(data.items);
         }
+      } else {
+        renderDayItems(dayCard, data.items || []);
       }
       updateRestState(dayCard);
     };
@@ -1193,6 +1409,76 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     planEditor.addEventListener("click", (event) => {
+      const addExerciseButton = event.target.closest("[data-add-exercise]");
+      if (addExerciseButton) {
+        event.preventDefault();
+        const dayCard = addExerciseButton.closest(".plan-day-card");
+        if (!dayCard) return;
+        const container = dayCard.querySelector(".coachapp-items");
+        if (!container) return;
+        const week = Number(dayCard.dataset.week || 1);
+        const day = Number(dayCard.dataset.day || 1);
+        const node = createNodeFromHtml(exerciseTemplate(week, day, nextPlanItemIndex(dayCard), {}));
+        container.querySelector(".coachapp-empty")?.remove();
+        container.appendChild(node);
+        node.querySelector("input, textarea")?.focus();
+        return;
+      }
+
+      const addBlockButton = event.target.closest("[data-add-block]");
+      if (addBlockButton) {
+        event.preventDefault();
+        const dayCard = addBlockButton.closest(".plan-day-card");
+        if (!dayCard) return;
+        const container = dayCard.querySelector(".coachapp-items");
+        if (!container) return;
+        const week = Number(dayCard.dataset.week || 1);
+        const day = Number(dayCard.dataset.day || 1);
+        const type = normalizeBlockType(addBlockButton.dataset.addBlock) || "superset";
+        const node = createNodeFromHtml(blockTemplate(week, day, nextPlanItemIndex(dayCard), type, {}));
+        container.querySelector(".coachapp-empty")?.remove();
+        container.appendChild(node);
+        node.querySelector("input, textarea")?.focus();
+        return;
+      }
+
+      const addSubExerciseButton = event.target.closest("[data-add-sub-exercise]");
+      if (addSubExerciseButton) {
+        event.preventDefault();
+        const blockCard = addSubExerciseButton.closest(".coachapp-block-card");
+        if (!blockCard) return;
+        const list = blockCard.querySelector(".coachapp-subexercise-list");
+        const typeInput = blockCard.querySelector('input[name$="_type"]');
+        if (!list || !typeInput) return;
+        const prefix = String(typeInput.name || "").replace(/_type$/, "");
+        const node = createNodeFromHtml(compactExerciseTemplate(`${prefix}_sub${nextSubExerciseIndex(blockCard)}`, {}));
+        list.appendChild(node);
+        node.querySelector("input, textarea")?.focus();
+        return;
+      }
+
+      const removePlanItemButton = event.target.closest("[data-remove-plan-item]");
+      if (removePlanItemButton) {
+        event.preventDefault();
+        const subRow = removePlanItemButton.closest(".coachapp-subexercise-row");
+        if (subRow) {
+          subRow.remove();
+          return;
+        }
+        const dayCard = removePlanItemButton.closest(".plan-day-card");
+        const itemNode = removePlanItemButton.closest(".coachapp-plan-item");
+        if (itemNode) {
+          itemNode.remove();
+        }
+        if (dayCard) {
+          const container = dayCard.querySelector(".coachapp-items");
+          if (container && !container.querySelector(".coachapp-plan-item")) {
+            container.innerHTML = '<p class="plan-empty coachapp-empty">Sin ejercicios todavía.</p>';
+          }
+        }
+        return;
+      }
+
       const toggleWeekButton = event.target.closest(".plan-week-toggle");
       if (toggleWeekButton) {
         event.preventDefault();
