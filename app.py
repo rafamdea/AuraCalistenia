@@ -2347,7 +2347,7 @@ def render_coach_dashboard(applications: list[dict], storage_status: dict) -> st
             "          </form>",
             '          <details class="pdf-format-help">',
             "            <summary>Ver plantilla recomendada</summary>",
-            "            <pre>AURA-TRAINING-V1\nALUMNO: usuario_alumno\nPLAN: Semana fuerza base\nSEMANA: 1 | Semana 1\nOBJETIVO: mejorar dominadas estrictas\nDIA: 1 | Tirón + core\nEJERCICIO: Dominadas estrictas | 5 | 5 | peso corporal | 90s | rango completo\nSUPERSERIE: Tirón técnico | 3 | 45s | 90s | sin perder forma\n- EJERCICIO: Remo australiano | 3 | 10-12 | | 30s | pecho a la barra\n- EJERCICIO: Hollow hold | 3 | 20s | | 30s | abdomen duro\nEMOM: Finisher | 4 min | cada minuto | 2 min | bajar reps si falla técnica\n- EJERCICIO: Dominadas | | 4 | | | minuto impar\n- EJERCICIO: Remo australiano | | 8 | | | minuto par\nINDICACIONES: técnica limpia y sin fallo articular</pre>",
+            "            <pre>AURA-TRAINING-V1\nALUMNO: usuario_alumno\nPLAN: Bloque fuerza base\nSEMANA: 1 | Semana 1\nOBJETIVO: mejorar dominadas estrictas\nDIA: 1 | Tirón + core\nEJERCICIO: Dominadas estrictas | 5 | 5 | peso corporal | 90s | rango completo\nSUPERSERIE: Tirón técnico | 3 | 45s | 90s | sin perder forma\n- EJERCICIO: Remo australiano | 3 | 10-12 | | 30s | pecho a la barra\n- EJERCICIO: Hollow hold | 3 | 20s | | 30s | abdomen duro\nEMOM: Finisher | 4 min | cada minuto | 2 min | bajar reps si falla técnica\n- EJERCICIO: Dominadas | | 4 | | | minuto impar\n- EJERCICIO: Remo australiano | | 8 | | | minuto par\nUNBROKEN: Resistencia final | 2 | sin romper la serie | 2 min | parar si pierde técnica\n- EJERCICIO: Flexiones | 2 | 20 unbroken | | | pecho cerca del suelo\nINDICACIONES: técnica limpia y sin fallo articular</pre>",
             "          </details>",
             "        </section>",
             "      </div>",
@@ -2463,6 +2463,7 @@ def plan_day_to_text(day: dict) -> str:
                     "UNBROKEN",
                     str(item.get("name", "")).strip(),
                     str(item.get("rounds", "")).strip(),
+                    str(item.get("rest_between", "")).strip(),
                     str(item.get("rest_after", "")).strip(),
                     str(item.get("notes", "")).strip(),
                 ]
@@ -2556,6 +2557,7 @@ def portal_block_meta_html(item: dict) -> str:
     elif item_type == "unbroken":
         fields = [
             ("Rondas", item.get("rounds", "")),
+            ("Objetivo", item.get("rest_between", "")),
             ("Descanso final", item.get("rest_after", "")),
         ]
     else:
@@ -4394,8 +4396,9 @@ def parse_day_items(text: str) -> list[dict]:
                     "type": "unbroken",
                     "name": name or "Set unbroken",
                     "rounds": parts[2] if len(parts) > 2 else "",
-                    "rest_after": parts[3] if len(parts) > 3 else "",
-                    "notes": parts[4] if len(parts) > 4 else "",
+                    "rest_between": parts[3] if len(parts) > 3 else "",
+                    "rest_after": parts[4] if len(parts) > 4 else "",
+                    "notes": parts[5] if len(parts) > 5 else "",
                     "exercises": [],
                 }
             else:
@@ -4555,8 +4558,9 @@ def parse_training_document_text(text: str) -> tuple[str, dict]:
                     "type": "unbroken",
                     "name": name or "Set unbroken",
                     "rounds": parts[1] if len(parts) > 1 else "",
-                    "rest_after": parts[2] if len(parts) > 2 else "",
-                    "notes": parts[3] if len(parts) > 3 else "",
+                    "rest_between": parts[2] if len(parts) > 2 else "",
+                    "rest_after": parts[3] if len(parts) > 3 else "",
+                    "notes": parts[4] if len(parts) > 4 else "",
                     "exercises": [],
                 }
             else:
