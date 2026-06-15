@@ -3967,43 +3967,26 @@ def render_admin_page(query: dict[str, list[str]]) -> str:
     section = resolve_admin_section(query)
     selected_user = (query.get("plan_user") or [""])[0]
     status = (query.get("status") or [""])[0]
+    events = load_json(EVENTS_PATH, [])
+    videos = load_json(VIDEOS_PATH, [])
+    content = load_content()
+    applications = load_applications()
+    storage_status = get_storage_status()
+    plan_expanded = bool(selected_user or status in {"plan_saved", "training_pdf_imported"})
     replacements = {
         "ADMIN_MESSAGE": build_admin_alert(query),
         "ADMIN_INICIO_TAB_ACTIVE": "is-active" if section == "inicio" else "",
         "ADMIN_PORTAL_TAB_ACTIVE": "is-active" if section == "portal" else "",
         "ADMIN_INICIO_PANEL_HIDDEN": "" if section == "inicio" else "hidden",
         "ADMIN_PORTAL_PANEL_HIDDEN": "" if section == "portal" else "hidden",
-        "COACH_DASHBOARD": "",
-        "PLAN_EDITOR": "",
-        "CONTENT_FORM": "",
-        "EVENT_LIST": "",
-        "VIDEO_LIST": "",
-        "APPLICATION_LIST": "",
-        "VISIT_METRICS": "",
+        "COACH_DASHBOARD": render_coach_dashboard(applications, storage_status),
+        "PLAN_EDITOR": render_plan_editor(applications, selected_user, expanded=plan_expanded),
+        "CONTENT_FORM": render_content_form(content),
+        "EVENT_LIST": render_event_list(events),
+        "VIDEO_LIST": render_video_list(videos),
+        "APPLICATION_LIST": render_application_list(applications),
+        "VISIT_METRICS": render_visit_metrics(),
     }
-    if section == "inicio":
-        events = load_json(EVENTS_PATH, [])
-        videos = load_json(VIDEOS_PATH, [])
-        content = load_content()
-        replacements.update(
-            {
-                "VISIT_METRICS": render_visit_metrics(),
-                "CONTENT_FORM": render_content_form(content),
-                "EVENT_LIST": render_event_list(events),
-                "VIDEO_LIST": render_video_list(videos),
-            }
-        )
-    else:
-        applications = load_applications()
-        storage_status = get_storage_status()
-        plan_expanded = bool(selected_user or status == "plan_saved")
-        replacements.update(
-            {
-                "COACH_DASHBOARD": render_coach_dashboard(applications, storage_status),
-                "PLAN_EDITOR": render_plan_editor(applications, selected_user, expanded=plan_expanded),
-                "APPLICATION_LIST": render_application_list(applications),
-            }
-        )
     return render_template(ADMIN_TEMPLATE, replacements)
 
 
