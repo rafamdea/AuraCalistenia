@@ -42,11 +42,11 @@
       </div>
 
       <div class="container admin-section-tabs" id="admin_section_tabs">
-        <button class="admin-section-tab is-active" type="button" data-admin-section="inicio">Inicio</button>
-        <button class="admin-section-tab" type="button" data-admin-section="portal">Portal del alumno</button>
+        <button class="admin-section-tab {{ADMIN_INICIO_TAB_ACTIVE}}" type="button" data-admin-section="inicio">Inicio</button>
+        <button class="admin-section-tab {{ADMIN_PORTAL_TAB_ACTIVE}}" type="button" data-admin-section="portal">Portal del alumno</button>
       </div>
 
-      <div class="container admin-stack admin-section-panel" data-admin-section-panel="inicio">
+      <div class="container admin-stack admin-section-panel" data-admin-section-panel="inicio" {{ADMIN_INICIO_PANEL_HIDDEN}}>
         {{VISIT_METRICS}}
         {{CONTENT_FORM}}
 
@@ -203,7 +203,7 @@
         </div>
       </div>
 
-      <div class="container admin-stack admin-section-panel" data-admin-section-panel="portal" hidden>
+      <div class="container admin-stack admin-section-panel" data-admin-section-panel="portal" {{ADMIN_PORTAL_PANEL_HIDDEN}}>
         {{COACH_DASHBOARD}}
         {{PLAN_EDITOR}}
 

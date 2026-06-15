@@ -3969,6 +3969,10 @@ def render_admin_page(query: dict[str, list[str]]) -> str:
     status = (query.get("status") or [""])[0]
     replacements = {
         "ADMIN_MESSAGE": build_admin_alert(query),
+        "ADMIN_INICIO_TAB_ACTIVE": "is-active" if section == "inicio" else "",
+        "ADMIN_PORTAL_TAB_ACTIVE": "is-active" if section == "portal" else "",
+        "ADMIN_INICIO_PANEL_HIDDEN": "" if section == "inicio" else "hidden",
+        "ADMIN_PORTAL_PANEL_HIDDEN": "" if section == "portal" else "hidden",
         "COACH_DASHBOARD": "",
         "PLAN_EDITOR": "",
         "CONTENT_FORM": "",
