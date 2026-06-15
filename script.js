@@ -994,6 +994,14 @@ document.addEventListener("DOMContentLoaded", () => {
       days: Array.from({ length: 7 }, (_, idx) => emptyDayData(idx + 1)),
     });
 
+    const maxWeekNumber = () =>
+      Math.max(
+        1,
+        ...Array.from(planEditor.querySelectorAll(".plan-week-block")).map((block) =>
+          Number(block.dataset.week || 0)
+        )
+      );
+
     const activateWeekTab = (weekNumber, scrollToWeek = false) => {
       const selected = Number(weekNumber || 1);
       planEditor.querySelectorAll(".plan-week-block").forEach((block) => {
@@ -1256,7 +1264,7 @@ document.addEventListener("DOMContentLoaded", () => {
           applyWeekData(weekBlock, emptyWeekData(weekNumber));
         } else if (action === "duplicate") {
           const cloneData = extractWeekData(weekBlock);
-          const targetIndex = weekNumber < 4 ? weekNumber + 1 : weekNumber - 1;
+          const targetIndex = weekNumber < maxWeekNumber() ? weekNumber + 1 : weekNumber - 1;
           const targetBlock = planEditor.querySelector(
             `.plan-week-block[data-week="${targetIndex}"]`
           );

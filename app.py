@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import csv
 import copy
 import hashlib
 import html
@@ -12,6 +13,7 @@ import shutil
 import smtplib
 import threading
 import time
+import unicodedata
 import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -23,6 +25,28 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
+
+try:
+    from pypdf import PdfReader
+except Exception:  # pragma: no cover - optional dependency until PDF import is used
+    PdfReader = None
+
+try:
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+except Exception:  # pragma: no cover - optional dependency until PDF export is used
+    colors = None
+    A4 = None
+    getSampleStyleSheet = None
+    mm = None
+    Paragraph = None
+    SimpleDocTemplate = None
+    Spacer = None
+    Table = None
+    TableStyle = None
 
 try:
     from zoneinfo import ZoneInfo
@@ -692,7 +716,8 @@ def seed_json_key(path: Path, default) -> None:
             payload = default
         try:
             db_seed_json(path, payload)
-            cache_set_json(path, payload)
+            stored_payload = db_load_json(path, payload)
+            cache_set_json(path, stored_payload)
             return
         except Exception as exc:
             remember_db_error(exc)
@@ -1375,7 +1400,8 @@ def normalize_plan(plan: dict | None) -> dict:
         "title": plan.get("title") or default.get("title", "Plan 4 semanas"),
         "weeks": [],
     }
-    for index in range(4):
+    week_count = max(4, len(weeks), len(default_weeks))
+    for index in range(week_count):
         source_week = weeks[index] if index < len(weeks) and isinstance(weeks[index], dict) else {}
         default_week = (
             default_weeks[index] if index < len(default_weeks) and isinstance(default_weeks[index], dict) else {}
@@ -1389,7 +1415,8 @@ def normalize_plan(plan: dict | None) -> dict:
         if not isinstance(default_days, list):
             default_days = []
         normalized_days = []
-        for day_index in range(7):
+        day_count = max(7, len(days), len(default_days))
+        for day_index in range(day_count):
             day_source = days[day_index] if day_index < len(days) else None
             if day_source is None and day_index < len(default_days):
                 day_source = default_days[day_index]
@@ -1747,6 +1774,12 @@ def build_admin_alert(query: dict[str, list[str]]) -> str:
         "client_added_active_mail_fail": "Alumno creado y activado, pero no se pudo iniciar el envío del correo (revisa SMTP).",
         "client_duplicated": "Alumno duplicado.",
         "client_exists": "Ese usuario ya existe.",
+        "harbiz_imported": "Importación Harbiz completada.",
+        "harbiz_empty": "El CSV Harbiz no tenía alumnos válidos.",
+        "training_pdf_imported": "Entrenamiento PDF importado.",
+        "training_pdf_error": "No se pudo interpretar el PDF. Revisa la plantilla estructurada.",
+        "pdf_dependency_missing": "Falta la dependencia de PDF en el servidor. Revisa requirements y redeploy.",
+        "comments_pdf_error": "No se pudo generar el PDF de comentarios.",
         "smtp_test_ok": "Prueba SMTP enviada correctamente.",
         "smtp_test_disabled": "SMTP desactivado. Activa AURA_SMTP_ENABLED o define credenciales.",
         "smtp_test_incomplete": "SMTP incompleto. Faltan variables HOST/USER/PASS.",
@@ -2021,6 +2054,37 @@ def build_progress_payload(plan: dict) -> dict:
     return {"weeks": week_payload}
 
 
+def iter_week_exercise_rows(week: dict) -> list[dict]:
+    rows = []
+    days = week.get("days") if isinstance(week, dict) else []
+    if not isinstance(days, list):
+        return rows
+    for day_index, day in enumerate(days, start=1):
+        if not isinstance(day, dict):
+            continue
+        day_title = str(day.get("title", "")).strip() or f"Día {day_index}"
+        items = day.get("items")
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            item_type = normalize_training_block_type(item.get("type", ""))
+            if item_type in PLAN_BLOCK_TYPES:
+                block_label = "EMOM" if item_type == "emom" else ("Set unbroken" if item_type == "unbroken" else "Superserie")
+                block_name = str(item.get("name", "")).strip() or block_label
+                exercises = item.get("exercises")
+                if not isinstance(exercises, list):
+                    exercises = []
+                for sub_item in exercises:
+                    if not isinstance(sub_item, dict):
+                        continue
+                    rows.append({"day": day_title, "block": f"{block_label}: {block_name}", "item": sub_item})
+                continue
+            rows.append({"day": day_title, "block": "", "item": item})
+    return rows
+
+
 def load_chat_messages(username: str) -> list[dict]:
     records = load_json(CHATS_PATH, [])
     if not isinstance(records, list):
@@ -2232,6 +2296,63 @@ def render_coach_dashboard(applications: list[dict], storage_status: dict) -> st
         )
     smtp_lines.append("  </div>")
     smtp_html = "\n".join(smtp_lines)
+    student_options = "".join(
+        [
+            f'<option value="{html.escape(str(app.get("username", "")))}">{html.escape(str(app.get("username", "")))}</option>'
+            for app in applications
+            if str(app.get("username", "")).strip()
+        ]
+    )
+    pdf_disabled = "" if student_options else " disabled"
+    import_tools_html = "\n".join(
+        [
+            '      <div class="coach-import-grid">',
+            '        <section class="coach-import-card">',
+            "          <h4>Importar alumnos desde Harbiz</h4>",
+            '          <p class="admin-note">Sube el CSV exportado de Harbiz. Aura creará solo alumnos nuevos y saltará emails ya existentes.</p>',
+            '          <form class="admin-form" action="/admin/import/harbiz" method="post" enctype="multipart/form-data">',
+            '            <div class="form-field">',
+            '              <label for="harbiz_csv">CSV Harbiz</label>',
+            '              <input id="harbiz_csv" name="harbiz_csv" type="file" accept=".csv,text/csv" required>',
+            "            </div>",
+            '            <div class="form-field">',
+            '              <label for="harbiz_password">Contraseña temporal</label>',
+            '              <input id="harbiz_password" name="default_password" type="text" placeholder="Si lo dejas vacío, Aura generará una por alumno">',
+            "            </div>",
+            '            <button class="btn glass primary small" type="submit">Importar CSV</button>',
+            "          </form>",
+            "        </section>",
+            '        <section class="coach-import-card">',
+            "          <h4>Subir entrenamiento por PDF</h4>",
+            '          <p class="admin-note">El PDF debe seguir la plantilla estructurada. Por defecto se añade como nuevas semanas para no pisar el plan actual.</p>',
+            '          <form class="admin-form" action="/admin/plan/import-pdf" method="post" enctype="multipart/form-data">',
+            '            <div class="form-row">',
+            '              <div class="form-field">',
+            '                <label for="pdf_username">Alumno</label>',
+            f'                <select id="pdf_username" name="username"{pdf_disabled}>{student_options}</select>',
+            "              </div>",
+            '              <div class="form-field">',
+            '                <label for="pdf_mode">Modo</label>',
+            '                <select id="pdf_mode" name="mode">',
+            '                  <option value="append">Añadir como nuevas semanas</option>',
+            '                  <option value="replace">Sustituir plan guardando copia interna</option>',
+            "                </select>",
+            "              </div>",
+            "            </div>",
+            '            <div class="form-field">',
+            '              <label for="training_pdf">PDF de entrenamiento</label>',
+            '              <input id="training_pdf" name="training_pdf" type="file" accept="application/pdf,.pdf" required>',
+            "            </div>",
+            f'            <button class="btn glass primary small" type="submit"{pdf_disabled}>Importar PDF</button>',
+            "          </form>",
+            '          <details class="pdf-format-help">',
+            "            <summary>Ver plantilla recomendada</summary>",
+            "            <pre>AURA-TRAINING-V1\nALUMNO: usuario_alumno\nPLAN: Semana fuerza base\nSEMANA: 1 | Semana 1\nOBJETIVO: mejorar dominadas estrictas\nDIA: 1 | Tirón + core\nEJERCICIO: Dominadas estrictas | 5 | 5 | peso corporal | 90s | rango completo\nSUPERSERIE: Tirón técnico | 3 | 45s | 90s | sin perder forma\n- EJERCICIO: Remo australiano | 3 | 10-12 | | 30s | pecho a la barra\n- EJERCICIO: Hollow hold | 3 | 20s | | 30s | abdomen duro\nEMOM: Finisher | 4 min | cada minuto | 2 min | bajar reps si falla técnica\n- EJERCICIO: Dominadas | | 4 | | | minuto impar\n- EJERCICIO: Remo australiano | | 8 | | | minuto par\nINDICACIONES: técnica limpia y sin fallo articular</pre>",
+            "          </details>",
+            "        </section>",
+            "      </div>",
+        ]
+    )
     return "\n".join(
         [
             '<div class="admin-card glass-card admin-wide">',
@@ -2263,6 +2384,7 @@ def render_coach_dashboard(applications: list[dict], storage_status: dict) -> st
             '        <label for="student_search">Buscar alumno (usuario, email o ID)</label>',
             '        <input id="student_search" type="text" placeholder="Escribe para filtrar...">',
             "      </div>",
+            import_tools_html,
             "    </div>",
             "  </details>",
             "</div>",
@@ -2523,8 +2645,12 @@ def render_portal_plan_item(item: dict, week_index: int, day_index: int, item_in
 
 def render_training_plan(plan: dict, active_week: int | None = None) -> str:
     normalized = normalize_plan(plan)
-    if active_week not in {1, 2, 3, 4}:
+    week_count = len(normalized.get("weeks", []))
+    if active_week is None or active_week < 1 or active_week > week_count:
         active_week = None
+    week_options = "\n".join(
+        [f'      <option value="{index}">Semana {index}</option>' for index in range(1, week_count + 1)]
+    )
     parts = [
         '<div class="training-board glass-card" data-stagger>',
         f'  <div class="training-head"><h3>{html.escape(normalized.get("title", "Plan de entrenamiento"))}</h3></div>',
@@ -2532,10 +2658,7 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
         '    <label for="portal_week_select">Semana</label>',
         '    <select id="portal_week_select">',
         '      <option value="all">Todas</option>',
-        '      <option value="1">Semana 1</option>',
-        '      <option value="2">Semana 2</option>',
-        '      <option value="3">Semana 3</option>',
-        '      <option value="4">Semana 4</option>',
+        week_options,
         "    </select>",
         "  </div>",
         '  <div class="training-grid">',
@@ -2618,6 +2741,14 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
         parts.append('        <small class="portal-save-state" aria-live="polite"></small>')
         parts.append('        <button class="btn glass ghost small" type="submit">Guardar resumen</button>')
         parts.append("      </form>")
+        whatsapp_text = urllib.parse.quote(
+            f"Te paso mis comentarios de la semana {week_index} de Aura Calistenia. PDF: "
+        )
+        pdf_href = f"/portal/week/comments.pdf?week={week_index}"
+        parts.append('      <div class="week-export-actions">')
+        parts.append(f'        <a class="btn glass primary small" href="{pdf_href}" target="_blank" rel="noopener">Descargar comentarios PDF</a>')
+        parts.append(f'        <a class="btn glass ghost small" href="https://wa.me/?text={whatsapp_text}" target="_blank" rel="noopener">Enviar por WhatsApp</a>')
+        parts.append("      </div>")
         parts.append("      </div>")
         parts.append("    </details>")
     parts.append("  </div>")
@@ -3391,6 +3522,9 @@ def render_plan_editor(applications: list[dict], selected_user: str, expanded: b
         selected_user = applications[0].get("username", "")
         selected_app = applications[0]
     plan = normalize_plan((selected_app or {}).get("plan"))
+    week_options_html = "".join(
+        [f'<option value="{i}">Semana {i}</option>' for i in range(1, len(plan.get("weeks", [])) + 1)]
+    )
 
     selector_items = []
     for app in applications:
@@ -3500,10 +3634,7 @@ def render_plan_editor(applications: list[dict], selected_user: str, expanded: b
             '  <div class="coach-progress-tools">',
             '    <label for="coach_progress_week">Semana</label>',
             '    <select id="coach_progress_week">',
-            '      <option value="1">Semana 1</option>',
-            '      <option value="2">Semana 2</option>',
-            '      <option value="3">Semana 3</option>',
-            '      <option value="4">Semana 4</option>',
+            week_options_html,
             "    </select>",
             "  </div>",
             '  <div class="coach-progress-content">',
@@ -3567,7 +3698,7 @@ def render_plan_editor(applications: list[dict], selected_user: str, expanded: b
             + "".join([f'<option value="{html.escape(app.get("username",""))}">{html.escape(app.get("username",""))}</option>' for app in applications])
             + "</select>",
             "      <select id=\"copy_plan_week\">"
-            + "".join([f'<option value="{i}">Semana {i}</option>' for i in range(1, 5)])
+            + week_options_html
             + "</select>",
             "      <span>→</span>",
             "      <select id=\"copy_target_user\">"
@@ -3583,7 +3714,7 @@ def render_plan_editor(applications: list[dict], selected_user: str, expanded: b
             )
             + "</select>",
             "      <select id=\"copy_target_week\">"
-            + "".join([f'<option value="{i}">Semana {i}</option>' for i in range(1, 5)])
+            + week_options_html
             + "</select>",
             '      <button type="button" class="btn glass ghost small" id="copy_week_btn">Copiar</button>',
             "    </div>",
@@ -3593,7 +3724,7 @@ def render_plan_editor(applications: list[dict], selected_user: str, expanded: b
             + "".join([f'<option value="{html.escape(app.get("username",""))}">{html.escape(app.get("username",""))}</option>' for app in applications])
             + "</select>",
             "      <select id=\"copy_day_week\">"
-            + "".join([f'<option value="{i}">Semana {i}</option>' for i in range(1, 5)])
+            + week_options_html
             + "</select>",
             "      <select id=\"copy_day_day\">"
             + "".join([f'<option value="{i}">Día {i}</option>' for i in range(1, 8)])
@@ -3612,7 +3743,7 @@ def render_plan_editor(applications: list[dict], selected_user: str, expanded: b
             )
             + "</select>",
             "      <select id=\"copy_day_target_week\">"
-            + "".join([f'<option value="{i}">Semana {i}</option>' for i in range(1, 5)])
+            + week_options_html
             + "</select>",
             "      <select id=\"copy_day_target_day\">"
             + "".join([f'<option value="{i}">Día {i}</option>' for i in range(1, 8)])
@@ -3622,14 +3753,14 @@ def render_plan_editor(applications: list[dict], selected_user: str, expanded: b
             "    <div class=\"plan-tool-row\">",
             "      <label>Mover día:</label>",
             "      <select id=\"move_day_week_from\">"
-            + "".join([f'<option value="{i}">Semana {i}</option>' for i in range(1, 5)])
+            + week_options_html
             + "</select>",
             "      <select id=\"move_day_from\">"
             + "".join([f'<option value="{i}">Día {i}</option>' for i in range(1, 8)])
             + "</select>",
             "      <span>→</span>",
             "      <select id=\"move_day_week_to\">"
-            + "".join([f'<option value="{i}">Semana {i}</option>' for i in range(1, 5)])
+            + week_options_html
             + "</select>",
             "      <select id=\"move_day_to\">"
             + "".join([f'<option value="{i}">Día {i}</option>' for i in range(1, 8)])
@@ -4149,6 +4280,271 @@ def parse_day_items(text: str) -> list[dict]:
             current_block = None
             items.append(parsed_item)
     return items
+
+
+def slugify_username(value: str, fallback: str = "alumno") -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    ascii_value = normalized.encode("ascii", "ignore").decode("ascii").lower()
+    cleaned = re.sub(r"[^a-z0-9]+", ".", ascii_value).strip(".")
+    return cleaned or fallback
+
+
+def split_structured_fields(value: str) -> list[str]:
+    return [part.strip() for part in str(value or "").split("|")]
+
+
+def make_plan_item_from_parts(parts: list[str]) -> dict:
+    padded = list(parts)
+    while len(padded) < 6:
+        padded.append("")
+    exercise, sets, reps, weight, rest, notes = padded[:6]
+    return {
+        "exercise": exercise.strip(),
+        "sets": sets.strip(),
+        "reps": reps.strip(),
+        "weight": weight.strip(),
+        "rest": rest.strip(),
+        "notes": notes.strip(),
+    }
+
+
+def parse_training_document_text(text: str) -> tuple[str, dict]:
+    username = ""
+    plan_title = "Plan importado"
+    weeks: list[dict] = []
+    current_week: dict | None = None
+    current_day: dict | None = None
+    current_block: dict | None = None
+    pending_indications: list[str] = []
+
+    def ensure_week(title: str = "") -> dict:
+        nonlocal current_week
+        if current_week is None:
+            current_week = {"title": title or f"Semana {len(weeks) + 1}", "summary": "", "days": []}
+            weeks.append(current_week)
+        return current_week
+
+    def ensure_day(title: str = "") -> dict:
+        nonlocal current_day, current_block
+        week = ensure_week()
+        if current_day is None:
+            current_day = {"title": title or f"Día {len(week['days']) + 1}", "rest": False, "items": [], "status": "", "status_note": "", "feedback": ""}
+            week["days"].append(current_day)
+            current_block = None
+        return current_day
+
+    for raw_line in str(text or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        upper = line.upper()
+        if upper in {"AURA-TRAINING-V1", "AURA TRAINING V1"}:
+            continue
+        if ":" in line:
+            label, raw_value = line.split(":", 1)
+            label_key = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode("ascii").strip().upper()
+            value = raw_value.strip()
+        else:
+            label_key = ""
+            value = line
+
+        if label_key in {"ALUMNO", "USUARIO"}:
+            username = value
+            continue
+        if label_key in {"PLAN", "BLOQUE", "TITULO"}:
+            plan_title = value or plan_title
+            continue
+        if label_key in {"SEMANA", "WEEK"}:
+            parts = split_structured_fields(value)
+            title = " | ".join([part for part in parts if part]).strip()
+            if parts and parts[0].isdigit():
+                title = parts[1] if len(parts) > 1 and parts[1] else f"Semana {parts[0]}"
+            current_week = {"title": title or f"Semana {len(weeks) + 1}", "summary": "", "days": []}
+            weeks.append(current_week)
+            current_day = None
+            current_block = None
+            continue
+        if label_key in {"OBJETIVO", "OBJETIVO DEL BLOQUE"}:
+            ensure_week()["summary"] = value
+            continue
+        if label_key in {"DIA", "DÍA", "DAY"}:
+            week = ensure_week()
+            parts = split_structured_fields(value)
+            title = " | ".join([part for part in parts if part]).strip()
+            if parts and parts[0].isdigit():
+                title = parts[1] if len(parts) > 1 and parts[1] else f"Día {parts[0]}"
+            current_day = {"title": title or f"Día {len(week['days']) + 1}", "rest": False, "items": [], "status": "", "status_note": "", "feedback": ""}
+            week["days"].append(current_day)
+            current_block = None
+            continue
+        if label_key in {"DESCANSO", "REST"} and current_day is None:
+            day = ensure_day(value or "Descanso")
+            day["rest"] = True
+            day["items"] = []
+            continue
+        if label_key in {"INDICACIONES", "INDICACIONES GENERALES", "NOTAS GENERALES"}:
+            pending_indications.append(value)
+            continue
+
+        block_type = normalize_training_block_type(label_key)
+        if block_type in PLAN_BLOCK_TYPES:
+            parts = split_structured_fields(value)
+            name = parts[0] if parts else ""
+            if block_type == "emom":
+                block = {
+                    "type": "emom",
+                    "name": name or "EMOM",
+                    "duration": parts[1] if len(parts) > 1 else "",
+                    "interval": parts[2] if len(parts) > 2 else "",
+                    "rest_after": parts[3] if len(parts) > 3 else "",
+                    "notes": parts[4] if len(parts) > 4 else "",
+                    "exercises": [],
+                }
+            elif block_type == "unbroken":
+                block = {
+                    "type": "unbroken",
+                    "name": name or "Set unbroken",
+                    "rounds": parts[1] if len(parts) > 1 else "",
+                    "rest_after": parts[2] if len(parts) > 2 else "",
+                    "notes": parts[3] if len(parts) > 3 else "",
+                    "exercises": [],
+                }
+            else:
+                block = {
+                    "type": "superset",
+                    "name": name or "Superserie",
+                    "rounds": parts[1] if len(parts) > 1 else "",
+                    "rest_between": parts[2] if len(parts) > 2 else "",
+                    "rest_after": parts[3] if len(parts) > 3 else "",
+                    "notes": parts[4] if len(parts) > 4 else "",
+                    "exercises": [],
+                }
+            ensure_day()["items"].append(block)
+            current_block = block
+            continue
+
+        is_child = line.startswith("-")
+        if is_child:
+            value = line[1:].strip()
+            if value.upper().startswith("EJERCICIO:"):
+                value = value.split(":", 1)[1].strip()
+        elif label_key in {"EJERCICIO", "EXERCISE"}:
+            pass
+        else:
+            pending_indications.append(line)
+            continue
+
+        item = make_plan_item_from_parts(split_structured_fields(value))
+        if not item.get("exercise"):
+            continue
+        if is_child and current_block is not None:
+            current_block.setdefault("exercises", []).append(item)
+        else:
+            ensure_day()["items"].append(item)
+            current_block = None
+
+    if pending_indications:
+        week = ensure_week()
+        current_summary = str(week.get("summary", "")).strip()
+        extra = "\n".join(pending_indications).strip()
+        week["summary"] = f"{current_summary}\n{extra}".strip() if current_summary else extra
+
+    if not weeks:
+        raise ValueError("No se encontraron semanas en el documento.")
+    cleaned_weeks = []
+    for index, week in enumerate(weeks, start=1):
+        days = week.get("days") if isinstance(week, dict) else []
+        if not isinstance(days, list):
+            days = []
+        cleaned_days = [normalize_plan_day(day) for day in days]
+        while len(cleaned_days) < 7:
+            cleaned_days.append(normalize_plan_day({"title": f"Día {len(cleaned_days) + 1}", "items": []}))
+        cleaned_weeks.append(
+            {
+                "title": str(week.get("title", "")).strip() or f"Semana {index}",
+                "summary": str(week.get("summary", "")).strip(),
+                "days": cleaned_days,
+            }
+        )
+    return username.strip(), {"title": plan_title, "weeks": cleaned_weeks}
+
+
+def extract_pdf_text(upload: UploadedFile) -> str:
+    if PdfReader is None:
+        raise RuntimeError("pypdf no está instalado.")
+    upload.file.seek(0)
+    reader = PdfReader(upload.file)
+    lines = []
+    for page in reader.pages:
+        lines.append(page.extract_text() or "")
+    return "\n".join(lines).strip()
+
+
+def detect_csv_delimiter(sample: str) -> str:
+    candidates = [",", ";", "\t"]
+    counts = {delimiter: sample.count(delimiter) for delimiter in candidates}
+    return max(counts, key=counts.get) if any(counts.values()) else ","
+
+
+def normalized_header_key(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    ascii_value = normalized.encode("ascii", "ignore").decode("ascii").lower()
+    return re.sub(r"[^a-z0-9]+", "", ascii_value)
+
+
+def find_csv_column(headers: list[str], candidates: list[str]) -> str | None:
+    normalized = {header: normalized_header_key(header) for header in headers}
+    candidate_keys = [normalized_header_key(candidate) for candidate in candidates]
+    for header, key in normalized.items():
+        if key in candidate_keys:
+            return header
+    for header, key in normalized.items():
+        if any(candidate and candidate in key for candidate in candidate_keys):
+            return header
+    return None
+
+
+def parse_harbiz_csv(upload: UploadedFile) -> list[dict]:
+    upload.file.seek(0)
+    raw = upload.file.read().decode("utf-8-sig", errors="replace")
+    delimiter = detect_csv_delimiter(raw[:4096])
+    reader = csv.DictReader(raw.splitlines(), delimiter=delimiter)
+    headers = reader.fieldnames or []
+    if not headers:
+        raise ValueError("El CSV no tiene cabecera.")
+    full_name_col = find_csv_column(headers, ["nombre completo", "full name", "client name", "cliente", "name", "nombre"])
+    first_name_col = find_csv_column(headers, ["first name", "firstname", "nombre"])
+    last_name_col = find_csv_column(headers, ["last name", "lastname", "apellidos", "apellido"])
+    email_col = find_csv_column(headers, ["email", "correo", "correo electronico", "e-mail", "mail"])
+    phone_col = find_csv_column(headers, ["telefono", "teléfono", "movil", "móvil", "phone", "mobile", "phone number"])
+    username_col = find_csv_column(headers, ["usuario", "username", "user"])
+    notes_col = find_csv_column(headers, ["notas", "observaciones", "notes", "lesiones", "objetivos"])
+    rows = []
+    for source in reader:
+        full_name = str(source.get(full_name_col or "", "") or "").strip()
+        first_name = str(source.get(first_name_col or "", "") or "").strip()
+        last_name = str(source.get(last_name_col or "", "") or "").strip()
+        name = full_name or " ".join(part for part in [first_name, last_name] if part).strip()
+        email = str(source.get(email_col or "", "") or "").strip()
+        username = str(source.get(username_col or "", "") or "").strip()
+        phone = str(source.get(phone_col or "", "") or "").strip()
+        notes = str(source.get(notes_col or "", "") or "").strip()
+        if not any([name, email, username]):
+            continue
+        rows.append({"name": name, "email": email, "username": username, "phone": phone, "notes": notes})
+    return rows
+
+
+def unique_application_username(applications: list[dict], base: str) -> str:
+    existing = {str(app.get("username", "")).strip().lower() for app in applications}
+    root = slugify_username(base)
+    candidate = root
+    suffix = 2
+    while candidate.lower() in existing:
+        candidate = f"{root}.{suffix}"
+        suffix += 1
+    existing.add(candidate.lower())
+    return candidate
 
 
 def parse_plan_items_from_form(data: dict[str, str], week_index: int, day_index: int) -> list[dict]:
@@ -5015,6 +5411,114 @@ class AuraHandler(SimpleHTTPRequestHandler):
         payload = memory.getvalue()
         self.send_bytes(payload, "application/zip", f"aura-backup-{timestamp}.zip")
 
+    def handle_week_comments_pdf(self, query: dict[str, list[str]]) -> None:
+        if SimpleDocTemplate is None:
+            self.redirect("/portal?access=comments_pdf_error")
+            return
+        cookie_header = self.headers.get("Cookie")
+        portal_user = get_session_user(cookie_header, USER_SESSION_COOKIE, "user")
+        if not portal_user:
+            self.send_error(HTTPStatus.FORBIDDEN)
+            return
+        try:
+            week_index = int((query.get("week") or ["1"])[0]) - 1
+        except ValueError:
+            week_index = 0
+        applications = load_applications()
+        app = find_application(applications, portal_user)
+        if not app:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        plan = normalize_plan(app.get("plan"))
+        weeks = plan.get("weeks", [])
+        if week_index < 0 or week_index >= len(weeks):
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        week = weeks[week_index]
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=14 * mm,
+            leftMargin=14 * mm,
+            topMargin=14 * mm,
+            bottomMargin=14 * mm,
+        )
+        styles = getSampleStyleSheet()
+        story = [
+            Paragraph("Comentarios de entrenamiento", styles["Title"]),
+            Paragraph(
+                html.escape(
+                    f"{app.get('username', portal_user)} · Semana {week_index + 1} · {week.get('title', '')}"
+                ),
+                styles["Normal"],
+            ),
+            Spacer(1, 8),
+        ]
+        summary = str(week.get("summary", "")).strip()
+        if summary:
+            story.extend([Paragraph("<b>Resumen semanal</b>", styles["Heading3"]), Paragraph(html.escape(summary), styles["BodyText"]), Spacer(1, 8)])
+        table_data = [["Día", "Ejercicio", "Comentario", "Estado"]]
+        for row in iter_week_exercise_rows(week):
+            item = row.get("item", {})
+            if not isinstance(item, dict):
+                continue
+            exercise = str(item.get("exercise", "")).strip()
+            if not exercise:
+                continue
+            comment_parts = []
+            status_note = str(item.get("status_note", "")).strip()
+            student_note = str(item.get("student_note", "")).strip()
+            notes = str(item.get("notes", "")).strip()
+            if student_note:
+                comment_parts.append(student_note)
+            if status_note:
+                comment_parts.append(f"Motivo: {status_note}")
+            if notes:
+                comment_parts.append(f"Nota técnica: {notes}")
+            status_label, _ = portal_item_status(item)
+            target = " · ".join(
+                part
+                for part in [
+                    str(item.get("sets", "")).strip() and f"{item.get('sets')} series",
+                    str(item.get("reps", "")).strip() and f"{item.get('reps')} reps",
+                    str(item.get("rest", "")).strip() and f"descanso {item.get('rest')}",
+                ]
+                if part
+            )
+            exercise_text = exercise if not target else f"{exercise}\n{target}"
+            if row.get("block"):
+                exercise_text = f"{row.get('block')}\n{exercise_text}"
+            table_data.append(
+                [
+                    Paragraph(html.escape(str(row.get("day", ""))), styles["BodyText"]),
+                    Paragraph(html.escape(exercise_text).replace("\n", "<br/>"), styles["BodyText"]),
+                    Paragraph(html.escape("\n".join(comment_parts) or "Sin comentario").replace("\n", "<br/>"), styles["BodyText"]),
+                    Paragraph(html.escape(status_label), styles["BodyText"]),
+                ]
+            )
+        if len(table_data) == 1:
+            story.append(Paragraph("No hay comentarios registrados todavía en esta semana.", styles["BodyText"]))
+        else:
+            table = Table(table_data, colWidths=[28 * mm, 55 * mm, 72 * mm, 25 * mm], repeatRows=1)
+            table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f1f1a")),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#c9d7d0")),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5faf7")]),
+                    ]
+                )
+            )
+            story.append(table)
+        doc.build(story)
+        payload = buffer.getvalue()
+        filename = f"comentarios_{slugify_username(portal_user)}_semana_{week_index + 1}.pdf"
+        self.send_bytes(payload, "application/pdf", filename)
+
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
@@ -5068,6 +5572,14 @@ class AuraHandler(SimpleHTTPRequestHandler):
                 self.send_error(HTTPStatus.FORBIDDEN)
                 return
             self.handle_export_json()
+            return
+
+        if path == "/portal/week/comments.pdf":
+            user = get_session_user(cookie_header, USER_SESSION_COOKIE, "user")
+            if not user:
+                self.send_error(HTTPStatus.FORBIDDEN)
+                return
+            self.handle_week_comments_pdf(query)
             return
 
         if path.startswith("/data/"):
@@ -5171,6 +5683,14 @@ class AuraHandler(SimpleHTTPRequestHandler):
 
         if path == "/admin/plan/update":
             self.handle_plan_update()
+            return
+
+        if path == "/admin/plan/import-pdf":
+            self.handle_plan_import_pdf()
+            return
+
+        if path == "/admin/import/harbiz":
+            self.handle_harbiz_import()
             return
 
         if path == "/admin/content":
@@ -5838,6 +6358,107 @@ class AuraHandler(SimpleHTTPRequestHandler):
         save_json(APPLICATIONS_PATH, applications)
         self.admin_redirect("client_duplicated")
 
+    def handle_harbiz_import(self) -> None:
+        data, files = parse_post_data(self)
+        upload = files.get("harbiz_csv")
+        if not upload:
+            self.admin_redirect("error")
+            return
+        try:
+            rows = parse_harbiz_csv(upload)
+        except Exception:
+            self.admin_redirect("harbiz_empty")
+            return
+        if not rows:
+            self.admin_redirect("harbiz_empty")
+            return
+        default_password = data.get("default_password", "").strip()
+        applications = load_applications()
+        existing_emails = {str(app.get("email", "")).strip().lower() for app in applications if str(app.get("email", "")).strip()}
+        imported = 0
+        for row in rows:
+            email = str(row.get("email", "")).strip()
+            if email and email.lower() in existing_emails:
+                continue
+            base_username = row.get("username") or row.get("email") or row.get("name") or "alumno"
+            username = unique_application_username(applications, str(base_username))
+            password = default_password or secrets.token_urlsafe(9)
+            salt, pw_hash = hash_password(password)
+            application = {
+                "id": f"app_{secrets.token_hex(4)}",
+                "username": username,
+                "email": email or f"{username}@aura.local",
+                "skill": "Calistenia",
+                "level": "",
+                "goal": str(row.get("notes", "")).strip(),
+                "concerns": str(row.get("phone", "")).strip(),
+                "name": str(row.get("name", "")).strip(),
+                "salt": salt,
+                "hash": pw_hash,
+                "approved": True,
+                "plan": copy_default_plan(),
+                "created_at": int(time.time()),
+                "source": "harbiz_csv",
+            }
+            applications.append(application)
+            if email:
+                existing_emails.add(email.lower())
+            imported += 1
+        if not imported:
+            self.admin_redirect("harbiz_empty")
+            return
+        save_json(APPLICATIONS_PATH, applications)
+        self.admin_redirect("harbiz_imported")
+
+    def handle_plan_import_pdf(self) -> None:
+        data, files = parse_post_data(self)
+        username = data.get("username", "").strip()
+        mode = data.get("mode", "append").strip()
+        upload = files.get("training_pdf")
+        if not username or not upload:
+            self.admin_redirect("error")
+            return
+        applications = load_applications()
+        app = find_application(applications, username)
+        if not app:
+            self.admin_redirect("error")
+            return
+        try:
+            text = extract_pdf_text(upload)
+        except RuntimeError:
+            self.admin_redirect("pdf_dependency_missing")
+            return
+        except Exception:
+            self.admin_redirect("training_pdf_error")
+            return
+        try:
+            document_username, imported_plan = parse_training_document_text(text)
+        except Exception:
+            self.admin_redirect("training_pdf_error")
+            return
+        if document_username and document_username.strip().lower() != username.strip().lower():
+            # El selector del admin manda: el texto del PDF solo sirve de comprobación humana.
+            pass
+        current_plan = normalize_plan(app.get("plan"))
+        if mode == "replace":
+            backups = app.get("plan_backups")
+            if not isinstance(backups, list):
+                backups = []
+            backups.append({"created_at": int(time.time()), "plan": current_plan})
+            app["plan_backups"] = backups[-5:]
+            app["plan"] = imported_plan
+        else:
+            merged_plan = normalize_plan(current_plan)
+            imported_weeks = imported_plan.get("weeks", [])
+            if not isinstance(imported_weeks, list):
+                imported_weeks = []
+            merged_plan["title"] = imported_plan.get("title") or merged_plan.get("title") or "Plan de entrenamiento"
+            merged_plan["weeks"].extend(imported_weeks)
+            app["plan"] = normalize_plan(merged_plan)
+        save_json(APPLICATIONS_PATH, applications)
+        plan_param = urllib.parse.quote(username)
+        self.redirect(f"/admin?admin_section=portal&status=training_pdf_imported&plan_user={plan_param}#plan")
+
     def handle_plan_update(self) -> None:
         data, _ = parse_post_data(self)
         username = data.get("username", "").strip()
@@ -5853,15 +6474,18 @@ class AuraHandler(SimpleHTTPRequestHandler):
         plan_title = data.get("plan_title", "").strip()
         if plan_title:
             plan["title"] = plan_title
-        for week_index in range(4):
+        for week_index, week in enumerate(plan.get("weeks", [])):
             week_title = data.get(f"week{week_index + 1}_title", "").strip()
             if week_title:
-                plan["weeks"][week_index]["title"] = week_title
-            for day_index in range(7):
+                week["title"] = week_title
+            days = week.get("days")
+            if not isinstance(days, list):
+                days = []
+                week["days"] = days
+            for day_index, day in enumerate(days):
                 day_key = f"week{week_index + 1}_day{day_index + 1}"
                 day_title = data.get(f"{day_key}_title", "").strip()
                 rest_flag = f"{day_key}_rest" in data
-                day = plan["weeks"][week_index]["days"][day_index]
                 old_items = day.get("items", []) if isinstance(day.get("items"), list) else []
                 day_text_key = f"{day_key}_text"
                 if day_text_key in data:
@@ -5898,9 +6522,6 @@ class AuraHandler(SimpleHTTPRequestHandler):
         except ValueError:
             self.redirect("/portal")
             return
-        if week_index not in range(4) or day_index not in range(7):
-            self.redirect("/portal")
-            return
         status = data.get("status", "").strip()
         status_note = data.get("status_note", "").strip()
         feedback = data.get("feedback", "").strip()
@@ -5911,6 +6532,13 @@ class AuraHandler(SimpleHTTPRequestHandler):
             self.redirect("/portal")
             return
         plan = normalize_plan(app.get("plan"))
+        if week_index < 0 or week_index >= len(plan.get("weeks", [])):
+            self.redirect("/portal")
+            return
+        days = plan["weeks"][week_index].get("days", [])
+        if day_index < 0 or day_index >= len(days):
+            self.redirect("/portal")
+            return
         day = plan["weeks"][week_index]["days"][day_index]
         if status in {"done", "partial", "missed"}:
             day["status"] = status
@@ -5941,7 +6569,7 @@ class AuraHandler(SimpleHTTPRequestHandler):
                 return
             self.redirect("/portal")
             return
-        if week_index not in range(4) or day_index not in range(7) or item_index < 0:
+        if week_index < 0 or day_index < 0 or item_index < 0:
             if self.wants_json():
                 self.send_json({"ok": False, "error": "invalid_index"}, HTTPStatus.BAD_REQUEST)
                 return
@@ -5960,6 +6588,19 @@ class AuraHandler(SimpleHTTPRequestHandler):
             self.redirect("/portal")
             return
         plan = normalize_plan(app.get("plan"))
+        if week_index >= len(plan.get("weeks", [])):
+            if self.wants_json():
+                self.send_json({"ok": False, "error": "invalid_index"}, HTTPStatus.BAD_REQUEST)
+                return
+            self.redirect("/portal")
+            return
+        days = plan["weeks"][week_index].get("days", [])
+        if day_index >= len(days):
+            if self.wants_json():
+                self.send_json({"ok": False, "error": "invalid_index"}, HTTPStatus.BAD_REQUEST)
+                return
+            self.redirect("/portal")
+            return
         day = plan["weeks"][week_index]["days"][day_index]
         items = day.get("items", [])
         if item_index >= len(items):
@@ -6032,12 +6673,6 @@ class AuraHandler(SimpleHTTPRequestHandler):
                 return
             self.redirect("/portal")
             return
-        if week_index not in range(4):
-            if self.wants_json():
-                self.send_json({"ok": False, "error": "invalid_week"}, HTTPStatus.BAD_REQUEST)
-                return
-            self.redirect("/portal")
-            return
         summary = data.get("summary", "").strip()
         applications = load_applications()
         app = find_application(applications, portal_user)
@@ -6048,6 +6683,12 @@ class AuraHandler(SimpleHTTPRequestHandler):
             self.redirect("/portal")
             return
         plan = normalize_plan(app.get("plan"))
+        if week_index < 0 or week_index >= len(plan.get("weeks", [])):
+            if self.wants_json():
+                self.send_json({"ok": False, "error": "invalid_week"}, HTTPStatus.BAD_REQUEST)
+                return
+            self.redirect("/portal")
+            return
         plan["weeks"][week_index]["summary"] = summary
         app["plan"] = plan
         save_json(APPLICATIONS_PATH, applications)

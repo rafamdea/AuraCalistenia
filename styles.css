@@ -2590,6 +2590,49 @@ h3 {
   box-shadow: 0 0 0 3px rgba(74, 241, 173, 0.15);
 }
 
+.coach-import-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.coach-import-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 16px;
+  background: rgba(8, 18, 14, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.coach-import-card h4 {
+  margin: 0 0 8px;
+  color: var(--white);
+}
+
+.pdf-format-help {
+  margin-top: 12px;
+}
+
+.pdf-format-help summary {
+  cursor: pointer;
+  color: var(--green-300);
+  font-weight: 700;
+}
+
+.pdf-format-help pre {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  margin: 10px 0 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(2, 8, 6, 0.72);
+  color: rgba(235, 255, 246, 0.92);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 .storage-pill {
   border-radius: 14px;
   padding: 10px 12px;
@@ -3021,6 +3064,13 @@ h3 {
   color: rgba(255, 255, 255, 0.6);
 }
 
+.week-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 .bio,
 .program,
 .gallery,
@@ -3203,6 +3253,10 @@ h3 {
 }
 
 @media (max-width: 900px) {
+  .coach-import-grid {
+    grid-template-columns: 1fr;
+  }
+
   .glass,
   .glass-card,
   .glass-pill {
