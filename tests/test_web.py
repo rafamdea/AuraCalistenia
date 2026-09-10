@@ -5,6 +5,7 @@ import http.client
 import threading
 import time
 import unittest
+from io import BytesIO
 from unittest.mock import patch, MagicMock
 from http.server import ThreadingHTTPServer
 import app
@@ -173,6 +174,59 @@ class WebTests(unittest.TestCase):
         self.assertEqual(rendered.count('data-day-exercises'), 2)
         self.assertEqual(rendered.count('Superserie A'), 2)
         self.assertIn('Descanso o movilidad.', rendered)
+        self.assertIn('Generar PDF semanal', rendered)
+        self.assertNotIn('⏳', rendered)
+
+    def test_weekly_pdf_contains_complete_training_feedback(self):
+        plan = app.copy_default_plan()
+        week = plan['weeks'][0]
+        week['title'] = 'Semana de control'
+        week['summary'] = 'Resumen final del alumno'
+        week['days'][0] = {
+            'title': 'Tirón y técnica',
+            'rest': False,
+            'status': '',
+            'status_note': 'Molestia leve al final',
+            'feedback': 'Buena energía durante la sesión',
+            'items': [
+                {
+                    'exercise': 'Dominadas lastradas', 'sets': '4', 'reps': '5',
+                    'weight': '8 kg', 'rest': '120 s', 'notes': 'Subida explosiva',
+                    'status': 'done', 'status_note': '', 'student_note': 'Carga 8 kg estable',
+                },
+                {
+                    'type': 'superset', 'name': 'Superserie final', 'rounds': '3',
+                    'rest_between': '90 s', 'exercises': [
+                        {
+                            'exercise': 'Remo australiano', 'sets': '', 'reps': '12',
+                            'weight': '', 'rest': '', 'notes': '', 'status': 'missed',
+                            'status_note': 'Falla tecnica en la ultima ronda',
+                            'student_note': 'Antebrazos cargados',
+                        },
+                        {
+                            'exercise': 'Curl en barra', 'sets': '', 'reps': '10',
+                            'weight': '', 'rest': '', 'notes': '', 'status': '',
+                            'status_note': '', 'student_note': '',
+                        },
+                    ],
+                },
+            ],
+        }
+        application = {
+            'username': 'alumno_demo', 'name': 'Alumno Demo', 'skill': 'Dominadas',
+            'goal': 'Mejorar fuerza', 'plan': plan,
+        }
+        payload = app.build_week_report_pdf(application, 1)
+        self.assertTrue(payload.startswith(b'%PDF'))
+        reader = app.PdfReader(BytesIO(payload))
+        text = '\n'.join(page.extract_text() or '' for page in reader.pages)
+        normalized_text = ' '.join(text.split())
+        for expected in [
+            'Informe semanal de entrenamiento', 'Alumno Demo', 'Dominadas lastradas',
+            'Carga 8 kg estable', 'Falla tecnica', 'Superserie final', 'Pendiente',
+            'Buena energía', 'Molestia leve', 'Resumen final del alumno',
+        ]:
+            self.assertIn(expected, normalized_text)
 
     def test_authenticated_portal_keeps_plan_and_chat(self):
         application={'username':'demo','approved':True,'skill':'Pino','goal':'Equilibrio','plan':app.copy_default_plan()}

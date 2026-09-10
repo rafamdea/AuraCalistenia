@@ -41,3 +41,13 @@
 @keyframes sponsor-drift{to{transform:translateX(-50%)}}
 @media(max-width:760px){.video-arena{grid-auto-columns:82%;gap:16px}.gallery-navigation{gap:10px}.gallery-navigation p{font-size:11px}.gallery-count{font-size:10px}.carousel-arrow{width:36px;height:36px}.gallery-controls{gap:6px}.partners .sponsor-track{width:280%}.partners .sponsor-loop{gap:20px;padding-inline:10px}.partners .sponsor-logo{width:140px;height:50px}.partners .sponsor-tile{padding:8px}.partners .sponsor-offer{max-width:170px;font-size:10px}}
 @media(prefers-reduced-motion:reduce){.sponsor-track{animation:none!important;width:100%!important}.partners .sponsor-loop{flex-basis:100%;flex-wrap:wrap}.partners .sponsor-loop[aria-hidden="true"]{display:none}.sponsor-toggle{display:none}}
+
+/* Clear access to each student's training portal. */
+.portal-link{display:flex;align-items:center;gap:10px;padding:9px 14px;background:#eaf0e5;border-color:#b9cdbb;transition:background .15s,border-color .15s,transform .15s}
+.portal-link:hover{background:#dfeadd;border-color:#0b7a5a;transform:translateY(-1px)}
+.portal-link .portal-link-icon{display:grid;place-items:center;width:32px;height:32px;margin:0;border-radius:7px;background:#0b7a5a;color:#fff;flex:0 0 auto}
+.portal-link-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7}
+.portal-link .portal-link-copy{display:grid;gap:1px;margin:0;line-height:1.15}
+.portal-link-copy strong{font-size:12px}
+.portal-link-copy small{font-size:9px;font-weight:500;color:#53695a}
+@media(max-width:760px){.portal-link{padding:7px 9px;gap:7px}.portal-link .portal-link-icon{width:29px;height:29px}.portal-link-copy small{display:none}.portal-link-copy strong{font-size:11px}}

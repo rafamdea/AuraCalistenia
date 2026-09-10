@@ -1787,7 +1787,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!weekCard || !stats) return;
     const kpi = weekCard.querySelector(".week-kpi");
     if (kpi) {
-      kpi.innerHTML = `<span>✓ ${stats.done || 0} (${stats.done_pct || 0}%)</span><span>✕ ${stats.missed || 0} (${stats.missed_pct || 0}%)</span><span>⏳ ${stats.pending || 0} (${stats.pending_pct || 0}%)</span>`;
+      kpi.innerHTML = `<span>Hechos ${stats.done || 0} (${stats.done_pct || 0}%)</span><span>Fallos ${stats.missed || 0} (${stats.missed_pct || 0}%)</span><span>Pendientes ${stats.pending || 0} (${stats.pending_pct || 0}%)</span>`;
     }
     const donut = weekCard.querySelector(".week-donut");
     const done = Number(stats.done_pct || 0);
@@ -1812,7 +1812,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!dayCard || !stats) return;
     const mini = dayCard.querySelector(".day-mini-stats");
     if (mini) {
-      mini.textContent = `✓ ${stats.done || 0} · ✕ ${stats.missed || 0} · ⏳ ${stats.pending || 0}`;
+      mini.textContent = `Hechos ${stats.done || 0} · Fallos ${stats.missed || 0} · Pendientes ${stats.pending || 0}`;
     }
   };
 

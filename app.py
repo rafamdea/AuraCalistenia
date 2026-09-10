@@ -41,14 +41,16 @@ except Exception:  # pragma: no cover - optional dependency until Excel import i
 try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 except Exception:  # pragma: no cover - optional dependency until PDF export is used
     colors = None
     A4 = None
     getSampleStyleSheet = None
+    ParagraphStyle = None
     mm = None
+    HRFlowable = None
     Paragraph = None
     SimpleDocTemplate = None
     Spacer = None
@@ -1796,7 +1798,7 @@ def build_admin_alert(query: dict[str, list[str]]) -> str:
         "training_file_error": "No se pudo interpretar el archivo. Revisa la plantilla estructurada.",
         "pdf_dependency_missing": "Falta la dependencia de PDF en el servidor. Revisa requirements y redeploy.",
         "spreadsheet_dependency_missing": "Falta la dependencia de Excel en el servidor. Revisa requirements y redeploy.",
-        "comments_pdf_error": "No se pudo generar el PDF de comentarios.",
+        "comments_pdf_error": "No se pudo generar el informe semanal en PDF.",
         "smtp_test_ok": "Prueba SMTP enviada correctamente.",
         "smtp_test_disabled": "SMTP desactivado. Activa AURA_SMTP_ENABLED o define credenciales.",
         "smtp_test_incomplete": "SMTP incompleto. Faltan variables HOST/USER/PASS.",
@@ -2100,6 +2102,261 @@ def iter_week_exercise_rows(week: dict) -> list[dict]:
                 continue
             rows.append({"day": day_title, "block": "", "item": item})
     return rows
+
+
+def _pdf_text(value, fallback: str = "-") -> str:
+    cleaned = str(value or "").strip()
+    return html.escape(cleaned or fallback).replace("\n", "<br/>")
+
+
+def _exercise_prescription(item: dict) -> str:
+    fields = [
+        ("Series", item.get("sets", "")),
+        ("Repeticiones", item.get("reps", "")),
+        ("Peso", item.get("weight", "")),
+        ("Descanso", item.get("rest", "")),
+    ]
+    return "<br/>".join(
+        f"<b>{label}:</b> {_pdf_text(value)}"
+        for label, value in fields
+        if str(value or "").strip()
+    ) or "Trabajo técnico"
+
+
+def _block_prescription(item: dict) -> str:
+    item_type = normalize_training_block_type(item.get("type", ""))
+    if item_type == "emom":
+        fields = [
+            ("Duración", item.get("duration", "")),
+            ("Intervalo", item.get("interval", "")),
+            ("Descanso final", item.get("rest_after", "")),
+        ]
+    elif item_type == "unbroken":
+        fields = [
+            ("Rondas", item.get("rounds", "")),
+            ("Objetivo", item.get("rest_between", "")),
+            ("Descanso final", item.get("rest_after", "")),
+        ]
+    else:
+        fields = [
+            ("Rondas", item.get("rounds", "")),
+            ("Descanso entre series", item.get("rest_between", "")),
+            ("Descanso final", item.get("rest_after", "")),
+        ]
+    values = [f"{label}: {str(value).strip()}" for label, value in fields if str(value or "").strip()]
+    return " · ".join(values)
+
+
+def build_week_report_pdf(application: dict, week_number: int) -> bytes:
+    """Build the student's complete weekly training report as a PDF."""
+    if SimpleDocTemplate is None:
+        raise RuntimeError("ReportLab no está disponible")
+    plan = normalize_plan(application.get("plan"))
+    weeks = plan.get("weeks", [])
+    week_index = week_number - 1
+    if week_index < 0 or week_index >= len(weeks):
+        raise IndexError("Semana fuera de rango")
+    week = weeks[week_index]
+    stats = compute_week_progress(week)
+    student_name = str(application.get("name") or application.get("username") or "Alumno").strip()
+    week_title = str(week.get("title", "")).strip() or f"Semana {week_number}"
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=14 * mm,
+        leftMargin=14 * mm,
+        topMargin=15 * mm,
+        bottomMargin=17 * mm,
+        title=f"Informe semanal de {student_name} - {week_title}",
+        author="Aura Calistenia",
+    )
+    base_styles = getSampleStyleSheet()
+    green = colors.HexColor("#0B7A5A")
+    dark_green = colors.HexColor("#193F31")
+    cream = colors.HexColor("#F7F8F2")
+    pale_green = colors.HexColor("#EAF0E5")
+    muted = colors.HexColor("#53695A")
+    line = colors.HexColor("#D4DED1")
+
+    styles = {
+        "brand": ParagraphStyle(
+            "AuraBrand", parent=base_styles["Normal"], fontName="Helvetica-Bold",
+            fontSize=10, leading=12, textColor=green, spaceAfter=5,
+        ),
+        "title": ParagraphStyle(
+            "AuraTitle", parent=base_styles["Title"], fontName="Helvetica-Bold",
+            fontSize=24, leading=27, textColor=dark_green, alignment=0, spaceAfter=7,
+        ),
+        "subtitle": ParagraphStyle(
+            "AuraSubtitle", parent=base_styles["Normal"], fontSize=9.5,
+            leading=13, textColor=muted, spaceAfter=12,
+        ),
+        "section": ParagraphStyle(
+            "AuraSection", parent=base_styles["Heading2"], fontName="Helvetica-Bold",
+            fontSize=14, leading=17, textColor=dark_green, spaceBefore=12, spaceAfter=7,
+        ),
+        "day": ParagraphStyle(
+            "AuraDay", parent=base_styles["Heading3"], fontName="Helvetica-Bold",
+            fontSize=11.5, leading=14, textColor=green, spaceBefore=11, spaceAfter=4,
+        ),
+        "body": ParagraphStyle(
+            "AuraBody", parent=base_styles["BodyText"], fontSize=8.5,
+            leading=11.5, textColor=dark_green,
+        ),
+        "small": ParagraphStyle(
+            "AuraSmall", parent=base_styles["BodyText"], fontSize=7.5,
+            leading=10, textColor=dark_green,
+        ),
+        "label": ParagraphStyle(
+            "AuraLabel", parent=base_styles["BodyText"], fontName="Helvetica-Bold",
+            fontSize=7.4, leading=9, textColor=colors.white,
+        ),
+    }
+
+    def draw_footer(canvas, current_doc) -> None:
+        canvas.saveState()
+        canvas.setStrokeColor(line)
+        canvas.line(14 * mm, 11 * mm, A4[0] - 14 * mm, 11 * mm)
+        canvas.setFillColor(muted)
+        canvas.setFont("Helvetica", 7.5)
+        canvas.drawString(14 * mm, 7 * mm, "Aura Calistenia · Informe de seguimiento")
+        canvas.drawRightString(A4[0] - 14 * mm, 7 * mm, f"Página {current_doc.page}")
+        canvas.restoreState()
+
+    story = [
+        Paragraph("AURA CALISTENIA", styles["brand"]),
+        Paragraph("Informe semanal de entrenamiento", styles["title"]),
+        Paragraph(
+            f"<b>Alumno:</b> {_pdf_text(student_name)} &nbsp;&nbsp; "
+            f"<b>Semana:</b> {week_number} · {_pdf_text(week_title)}<br/>"
+            f"<b>Objetivo:</b> {_pdf_text(application.get('goal'), 'No indicado')} &nbsp;&nbsp; "
+            f"<b>Skill:</b> {_pdf_text(application.get('skill'), 'No indicada')}",
+            styles["subtitle"],
+        ),
+        HRFlowable(width="100%", thickness=1, color=line, spaceAfter=10),
+    ]
+
+    summary_data = [
+        [Paragraph("COMPLETADOS", styles["label"]), Paragraph("FALLADOS", styles["label"]), Paragraph("PENDIENTES", styles["label"]), Paragraph("CUMPLIMIENTO", styles["label"])],
+        [
+            Paragraph(f"<b>{stats['done']}</b> de {stats['total']}", styles["body"]),
+            Paragraph(f"<b>{stats['missed']}</b> de {stats['total']}", styles["body"]),
+            Paragraph(f"<b>{stats['pending']}</b> de {stats['total']}", styles["body"]),
+            Paragraph(f"<b>{stats['done_pct']}%</b>", styles["body"]),
+        ],
+    ]
+    summary_table = Table(summary_data, colWidths=[45 * mm] * 4)
+    summary_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), green),
+        ("BACKGROUND", (0, 1), (-1, 1), cream),
+        ("BOX", (0, 0), (-1, -1), 0.5, line),
+        ("INNERGRID", (0, 0), (-1, -1), 0.35, line),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.extend([summary_table, Paragraph("Detalle por día", styles["section"])])
+
+    days = week.get("days") if isinstance(week.get("days"), list) else []
+    for day_index, day in enumerate(days, start=1):
+        if not isinstance(day, dict) or not plan_day_has_content(day):
+            continue
+        day_title = str(day.get("title", "")).strip() or DAY_LABELS[(day_index - 1) % len(DAY_LABELS)]
+        day_stats = compute_day_progress(day)
+        story.append(Paragraph(
+            f"Día {day_index} · {_pdf_text(day_title)} &nbsp; "
+            f"<font color='#53695A'>{day_stats['done']} completados · {day_stats['missed']} fallados · {day_stats['pending']} pendientes</font>",
+            styles["day"],
+        ))
+        day_feedback = str(day.get("feedback", "")).strip()
+        day_status_note = str(day.get("status_note", "")).strip()
+        if day_feedback or day_status_note:
+            feedback_parts = []
+            if day_feedback:
+                feedback_parts.append(f"<b>Feedback del día:</b> {_pdf_text(day_feedback)}")
+            if day_status_note:
+                feedback_parts.append(f"<b>Incidencias:</b> {_pdf_text(day_status_note)}")
+            story.append(Paragraph("<br/>".join(feedback_parts), styles["body"]))
+            story.append(Spacer(1, 5))
+
+        exercise_rows = [[
+            Paragraph("ESTADO", styles["label"]),
+            Paragraph("EJERCICIO", styles["label"]),
+            Paragraph("TRABAJO INDICADO", styles["label"]),
+            Paragraph("REGISTRO DEL ALUMNO", styles["label"]),
+        ]]
+        items = day.get("items") if isinstance(day.get("items"), list) else []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            item_type = normalize_training_block_type(item.get("type", ""))
+            if item_type in PLAN_BLOCK_TYPES:
+                block_label = "EMOM" if item_type == "emom" else ("Set unbroken" if item_type == "unbroken" else "Superserie")
+                block_name = str(item.get("name", "")).strip() or block_label
+                block_meta = _block_prescription(item)
+                sub_items = item.get("exercises") if isinstance(item.get("exercises"), list) else []
+            else:
+                block_label = ""
+                block_name = ""
+                block_meta = ""
+                sub_items = [item]
+            for sub_item in sub_items:
+                if not isinstance(sub_item, dict) or not str(sub_item.get("exercise", "")).strip():
+                    continue
+                status_label, status_class = portal_item_status(sub_item)
+                status_color = "#0B7A5A" if status_class == "done" else ("#A4453C" if status_class == "missed" else "#53695A")
+                exercise_name = _pdf_text(sub_item.get("exercise"))
+                if block_label:
+                    exercise_name = f"<b>{_pdf_text(block_label)} · {_pdf_text(block_name)}</b><br/>{exercise_name}"
+                    if block_meta:
+                        exercise_name += f"<br/><font color='#53695A'>{_pdf_text(block_meta)}</font>"
+                trainer_note = str(sub_item.get("notes", "")).strip()
+                prescription = _exercise_prescription(sub_item)
+                if trainer_note:
+                    prescription += f"<br/><b>Nota del entrenador:</b> {_pdf_text(trainer_note)}"
+                student_parts = []
+                if str(sub_item.get("student_note", "")).strip():
+                    student_parts.append(f"<b>Sensaciones / cargas:</b> {_pdf_text(sub_item.get('student_note'))}")
+                if str(sub_item.get("status_note", "")).strip():
+                    student_parts.append(f"<b>Motivo o incidencia:</b> {_pdf_text(sub_item.get('status_note'))}")
+                exercise_rows.append([
+                    Paragraph(f"<font color='{status_color}'><b>{_pdf_text(status_label)}</b></font>", styles["small"]),
+                    Paragraph(exercise_name, styles["small"]),
+                    Paragraph(prescription, styles["small"]),
+                    Paragraph("<br/>".join(student_parts) if student_parts else "Sin observaciones", styles["small"]),
+                ])
+        if len(exercise_rows) == 1:
+            rest_text = "Día de descanso o movilidad." if day.get("rest") else "No hay ejercicios registrados."
+            story.append(Paragraph(rest_text, styles["body"]))
+        else:
+            exercise_table = Table(exercise_rows, colWidths=[25 * mm, 49 * mm, 55 * mm, 51 * mm], repeatRows=1)
+            exercise_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), dark_green),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, pale_green]),
+                ("BOX", (0, 0), (-1, -1), 0.5, line),
+                ("INNERGRID", (0, 0), (-1, -1), 0.3, line),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]))
+            story.append(exercise_table)
+
+    story.append(Paragraph("Resumen escrito por el alumno", styles["section"]))
+    story.append(Paragraph(_pdf_text(week.get("summary"), "Sin resumen semanal registrado."), styles["body"]))
+    generated_at = current_site_datetime().strftime("%d/%m/%Y a las %H:%M")
+    story.extend([
+        Spacer(1, 12),
+        HRFlowable(width="100%", thickness=0.6, color=line, spaceAfter=6),
+        Paragraph(f"Documento generado desde el portal de Aura el {generated_at}.", styles["small"]),
+    ])
+    doc.build(story, onFirstPage=draw_footer, onLaterPages=draw_footer)
+    return buffer.getvalue()
 
 
 def load_chat_messages(username: str) -> list[dict]:
@@ -2727,7 +2984,7 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
         parts.append('        <div class="training-week-top">')
         parts.append(f'          <div class="training-week-title">{week_title}</div>')
         parts.append(
-            f'          <div class="week-kpi"><span>✓ {week_stats["done"]} ({week_stats["done_pct"]}%)</span><span>✕ {week_stats["missed"]} ({week_stats["missed_pct"]}%)</span><span>⏳ {week_stats["pending"]} ({week_stats["pending_pct"]}%)</span></div>'
+            f'          <div class="week-kpi"><span>Hechos {week_stats["done"]} ({week_stats["done_pct"]}%)</span><span>Fallos {week_stats["missed"]} ({week_stats["missed_pct"]}%)</span><span>Pendientes {week_stats["pending"]} ({week_stats["pending_pct"]}%)</span></div>'
         )
         parts.append("        </div>")
         parts.append(
@@ -2759,7 +3016,7 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
             parts.append(f'            <span class="day-label">Día {day_index}</span>')
             parts.append(f'            <strong class="day-title">{html.escape(day_label)}</strong>')
             parts.append(
-                f'            <span class="day-mini-stats">✓ {day_stats["done"]} · ✕ {day_stats["missed"]} · ⏳ {day_stats["pending"]}</span>'
+                f'            <span class="day-mini-stats">Hechos {day_stats["done"]} · Fallos {day_stats["missed"]} · Pendientes {day_stats["pending"]}</span>'
             )
             parts.append("          </div>")
             items = day_text.get("items") if isinstance(day_text, dict) else []
@@ -2790,12 +3047,15 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
         parts.append('        <button class="btn glass ghost small" type="submit">Guardar resumen</button>')
         parts.append("      </form>")
         whatsapp_text = urllib.parse.quote(
-            f"Te paso mis comentarios de la semana {week_index} de Aura Calistenia. PDF: "
+            f"Te paso mi informe de entrenamiento de la semana {week_index} de Aura Calistenia. PDF: "
         )
         pdf_href = f"/portal/week/comments.pdf?week={week_index}"
-        parts.append('      <div class="week-export-actions">')
-        parts.append(f'        <a class="btn glass primary small" href="{pdf_href}" target="_blank" rel="noopener">Descargar comentarios PDF</a>')
-        parts.append(f'        <a class="btn glass ghost small" href="https://wa.me/?text={whatsapp_text}" target="_blank" rel="noopener">Enviar por WhatsApp</a>')
+        parts.append('      <div class="week-report-card">')
+        parts.append('        <div class="week-report-copy"><strong>Tu informe semanal</strong><span>Reúne ejercicios, hechos, fallos, pendientes, cargas, sensaciones y comentarios.</span></div>')
+        parts.append('        <div class="week-export-actions">')
+        parts.append(f'          <a class="btn glass primary small" href="{pdf_href}" target="_blank" rel="noopener">Generar PDF semanal</a>')
+        parts.append(f'          <a class="btn glass ghost small" href="https://wa.me/?text={whatsapp_text}" target="_blank" rel="noopener">Compartir por WhatsApp</a>')
+        parts.append("        </div>")
         parts.append("      </div>")
         parts.append("      </div>")
         parts.append("    </details>")
@@ -2989,7 +3249,7 @@ def render_password_reset_page(query: dict[str, list[str]]) -> str:
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260910-day-carousel-2\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260910-week-report\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -3012,7 +3272,7 @@ def render_password_reset_page(query: dict[str, list[str]]) -> str:
             "    <main class=\"section\">",
             f"      {card}",
             "    </main>",
-            "    <script src=\"/script.js?v=20260910-day-carousel-2\"></script>",
+            "    <script src=\"/script.js?v=20260910-week-report\"></script>",
             "  </body>",
             "</html>",
         ]
@@ -3031,7 +3291,7 @@ def render_review_page(card_html: str, page_title: str = "Revisar solicitud - Au
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260910-day-carousel-2\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260910-week-report\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -3054,7 +3314,7 @@ def render_review_page(card_html: str, page_title: str = "Revisar solicitud - Au
             "    <main class=\"section\">",
             f"      {card_html}",
             "    </main>",
-            "    <script src=\"/script.js?v=20260910-day-carousel-2\"></script>",
+            "    <script src=\"/script.js?v=20260910-week-report\"></script>",
             "  </body>",
             "</html>",
         ]
@@ -4224,7 +4484,7 @@ def render_login_page(error: str | None = None) -> str:
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260910-day-carousel-2\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260910-week-report\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -4259,7 +4519,7 @@ def render_login_page(error: str | None = None) -> str:
             "        </form>",
             "      </div>",
             "    </main>",
-            "    <script src=\"/script.js?v=20260910-day-carousel-2\"></script>",
+            "    <script src=\"/script.js?v=20260910-week-report\"></script>",
             "  </body>",
             "</html>",
         ]
@@ -6065,102 +6325,20 @@ class AuraHandler(SimpleHTTPRequestHandler):
             self.send_error(HTTPStatus.FORBIDDEN)
             return
         try:
-            week_index = int((query.get("week") or ["1"])[0]) - 1
+            week_number = int((query.get("week") or ["1"])[0])
         except ValueError:
-            week_index = 0
+            week_number = 1
         applications = load_applications()
-        app = find_application(applications, portal_user)
-        if not app:
+        application = find_application(applications, portal_user)
+        if not application:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        plan = normalize_plan(app.get("plan"))
-        weeks = plan.get("weeks", [])
-        if week_index < 0 or week_index >= len(weeks):
+        try:
+            payload = build_week_report_pdf(application, week_number)
+        except IndexError:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        week = weeks[week_index]
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            rightMargin=14 * mm,
-            leftMargin=14 * mm,
-            topMargin=14 * mm,
-            bottomMargin=14 * mm,
-        )
-        styles = getSampleStyleSheet()
-        story = [
-            Paragraph("Comentarios de entrenamiento", styles["Title"]),
-            Paragraph(
-                html.escape(
-                    f"{app.get('username', portal_user)} · Semana {week_index + 1} · {week.get('title', '')}"
-                ),
-                styles["Normal"],
-            ),
-            Spacer(1, 8),
-        ]
-        summary = str(week.get("summary", "")).strip()
-        if summary:
-            story.extend([Paragraph("<b>Resumen semanal</b>", styles["Heading3"]), Paragraph(html.escape(summary), styles["BodyText"]), Spacer(1, 8)])
-        table_data = [["Día", "Ejercicio", "Comentario", "Estado"]]
-        for row in iter_week_exercise_rows(week):
-            item = row.get("item", {})
-            if not isinstance(item, dict):
-                continue
-            exercise = str(item.get("exercise", "")).strip()
-            if not exercise:
-                continue
-            comment_parts = []
-            status_note = str(item.get("status_note", "")).strip()
-            student_note = str(item.get("student_note", "")).strip()
-            notes = str(item.get("notes", "")).strip()
-            if student_note:
-                comment_parts.append(student_note)
-            if status_note:
-                comment_parts.append(f"Motivo: {status_note}")
-            if notes:
-                comment_parts.append(f"Nota técnica: {notes}")
-            status_label, _ = portal_item_status(item)
-            target = " · ".join(
-                part
-                for part in [
-                    str(item.get("sets", "")).strip() and f"{item.get('sets')} series",
-                    str(item.get("reps", "")).strip() and f"{item.get('reps')} reps",
-                    str(item.get("rest", "")).strip() and f"descanso {item.get('rest')}",
-                ]
-                if part
-            )
-            exercise_text = exercise if not target else f"{exercise}\n{target}"
-            if row.get("block"):
-                exercise_text = f"{row.get('block')}\n{exercise_text}"
-            table_data.append(
-                [
-                    Paragraph(html.escape(str(row.get("day", ""))), styles["BodyText"]),
-                    Paragraph(html.escape(exercise_text).replace("\n", "<br/>"), styles["BodyText"]),
-                    Paragraph(html.escape("\n".join(comment_parts) or "Sin comentario").replace("\n", "<br/>"), styles["BodyText"]),
-                    Paragraph(html.escape(status_label), styles["BodyText"]),
-                ]
-            )
-        if len(table_data) == 1:
-            story.append(Paragraph("No hay comentarios registrados todavía en esta semana.", styles["BodyText"]))
-        else:
-            table = Table(table_data, colWidths=[28 * mm, 55 * mm, 72 * mm, 25 * mm], repeatRows=1)
-            table.setStyle(
-                TableStyle(
-                    [
-                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f1f1a")),
-                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#c9d7d0")),
-                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5faf7")]),
-                    ]
-                )
-            )
-            story.append(table)
-        doc.build(story)
-        payload = buffer.getvalue()
-        filename = f"comentarios_{slugify_username(portal_user)}_semana_{week_index + 1}.pdf"
+        filename = f"informe_{slugify_username(portal_user)}_semana_{week_number}.pdf"
         self.send_bytes(payload, "application/pdf", filename)
 
     def do_GET(self) -> None:

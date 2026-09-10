@@ -3190,7 +3190,46 @@ h3 {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 12px;
+}
+
+.week-report-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #c5d7c5;
+  border-radius: 12px;
+  background: #eaf0e5;
+}
+
+.week-report-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.week-report-copy strong {
+  color: #193f31;
+  font-size: 0.92rem;
+}
+
+.week-report-copy span {
+  color: #53695a;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  .week-report-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .week-export-actions .btn {
+    flex: 1 1 100%;
+  }
 }
 
 .bio,

@@ -11,3 +11,7 @@ ziiFu6gF
 
 # Local social-video exports and demonstration captures
 /promo-aura/
+
+# Local quality-review artifacts
+/output/
+/tmp/
