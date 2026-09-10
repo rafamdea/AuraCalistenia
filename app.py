@@ -4,6 +4,7 @@ import base64
 import csv
 import copy
 import hashlib
+import gzip
 import html
 import json
 import os
@@ -15,6 +16,7 @@ import threading
 import time
 import unicodedata
 import urllib.parse
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.message import EmailMessage
@@ -317,80 +319,79 @@ LEGACY_DEFAULT_WEEK_TITLES = {
 SPONSOR_PULLUP_URL = "https://pullup-dip.com/?ref=pullup-dip.com%3Fref%3Drafamdea&utm_source=influenzer"
 SPONSOR_ZUMUB_URL = "https://www.zumub.com/ES/"
 
-DEFAULT_CONTENT = {
-    "hero": {
-        "eyebrow": "Entrenamiento gratuito · 4 semanas",
-        "title": "AURA CALISTENIA",
-        "subtitle": (
-            "Plan gratuito de 4 semanas para dominar dominadas, muscle up y pino con disciplina real."
-        ),
-    },
-    "stats": [
-        {"value": "4", "label": "Semanas intensas"},
-        {"value": "7", "label": "Habilidades clave"},
-        {"value": "GRATIS!", "label": "0€ costo de entrada"},
-    ],
-    "bio": {
-        "eyebrow": "Biografía",
-        "name": "Rafa Montero de Espinosa",
-        "paragraphs": [
-            (
-                "Teniente de Navío, 27 años. En marzo de 2024 cambié el running por la "
-                "calistenia desde cero: no podía hacer ni una dominada ni un fondo. En abril "
-                "empecé con entrenador personal y un plan de fuerza base, templando disciplina "
-                "militar y obsesión por la técnica."
-            ),
-            (
-                "En octubre de 2025 volví a parques, barras y suelo. En pocos meses "
-                "desbloqueé pino, front lever y back lever, y elevé la resistencia. Debuté "
-                "en Málaga el 19 de diciembre y hoy me preparo para competir en resistencia "
-                "con la meta de estar entre los mejores. Mi sello es la disciplina: cero "
-                "alcohol, cero tabaco y una vida dedicada a progresar cada día."
-            ),
-        ],
-        "signature": "Teniente de Navío · Entrenador",
-        "image": "FOTOS/bio-creador.jpg",
-        "image_caption": "",
-    },
-    "program": {
-        "title": "Evolución del pino libre",
-        "lead": (
-            "En este programa trabajamos los puntos débiles que desbloquean cada skill. "
-            "Aquí tienes la evolución del pino libre con las 4 progresiones clave."
-        ),
-        "highlight_title": "Progresiones que desbloquean el equilibrio",
-        "highlight_text": (
-            "Cada fase ataca un punto crítico: fuerza de empuje, entrada al pino, "
-            "potencia en flexión asistida y control total de la línea corporal."
-        ),
-        "bullets": [
-            "Empuje vertical y fuerza de hombro.",
-            "Entrada al pino con asistencia y control.",
-            "Flexiones de pino asistidas para potencia.",
-            "Tensión corporal y equilibrio estable con las manos.",
-        ],
-        "image": "FOTOS/pino.jpg",
-        "image_caption": "Pino libre en acción",
-    },
-    "contact": {
-        "email": "rafamdeeales@gmail.com",
-        "phone": "+34 644 660 583",
-        "city": "Sevilla, España",
-        "instagram": "@rafamdea",
-    },
-    "sponsors": [
-        {
-            "name": "PULLUP&DIP",
-            "logo": "LOGOS/pullupanddip.png",
-            "url": SPONSOR_PULLUP_URL,
-        },
-        {
-            "name": "ZUMUB",
-            "logo": "LOGOS/zumub.png",
-            "url": SPONSOR_ZUMUB_URL,
-        },
-    ],
-}
+LEGACY_PUBLIC_CONTENT = {'hero': {'eyebrow': 'Entrenamiento gratuito · 4 semanas',
+          'title': 'AURA CALISTENIA',
+          'subtitle': 'Plan gratuito de 4 semanas para dominar dominadas, muscle up y pino con '
+                      'disciplina real.'},
+ 'stats': [{'value': '4', 'label': 'Semanas intensas'},
+           {'value': '7', 'label': 'Habilidades clave'},
+           {'value': 'GRATIS!', 'label': '0€ costo de entrada'}],
+ 'program': {'title': 'Evolución del pino libre',
+             'lead': 'En este programa trabajamos los puntos débiles que desbloquean cada skill. Aquí '
+                     'tienes la evolución del pino libre con las 4 progresiones clave.',
+             'highlight_title': 'Progresiones que desbloquean el equilibrio',
+             'highlight_text': 'Cada fase ataca un punto crítico: fuerza de empuje, entrada al pino, '
+                               'potencia en flexión asistida y control total de la línea corporal.',
+             'bullets': ['Empuje vertical y fuerza de hombro.',
+                         'Entrada al pino con asistencia y control.',
+                         'Flexiones de pino asistidas para potencia.',
+                         'Tensión corporal y equilibrio estable con las manos.'],
+             'image': 'FOTOS/pino.jpg',
+             'image_caption': 'Pino libre en acción'},
+ 'bio': {'eyebrow': 'Biografía',
+         'name': 'Rafa Montero de Espinosa',
+         'paragraphs': ['Teniente de Navío, 27 años. En marzo de 2024 cambié el running por la '
+                        'calistenia desde cero: no podía hacer ni una dominada ni un fondo. En abril '
+                        'empecé con entrenador personal y un plan de fuerza base, templando disciplina '
+                        'militar y obsesión por la técnica.',
+                        'En octubre de 2025 volví a parques, barras y suelo. En pocos meses desbloqueé '
+                        'pino, front lever y back lever, y elevé la resistencia. Debuté en Málaga el 19 '
+                        'de diciembre y hoy me preparo para competir en resistencia con la meta de '
+                        'estar entre los mejores. Mi sello es la disciplina: cero alcohol, cero tabaco '
+                        'y una vida dedicada a progresar cada día.'],
+         'signature': 'Teniente de Navío · Entrenador',
+         'image': 'FOTOS/bio-creador.jpg',
+         'image_caption': ''}}
+
+DEFAULT_CONTENT = {'hero': {'eyebrow': 'Entrenamiento personalizado · Con Rafa',
+          'title': 'Tu fuerza. Tu camino. Tu Aura.',
+          'subtitle': 'Entrena calistenia con un plan hecho para ti. Construye fuerza, mejora tu '
+                      'técnica y avanza hacia tus objetivos con seguimiento personal.'},
+ 'stats': [{'value': 'A tu medida', 'label': 'Tu nivel y tus objetivos'},
+           {'value': 'Contigo', 'label': 'Seguimiento personal'},
+           {'value': 'Tu espacio', 'label': 'Portal de entrenamiento'}],
+ 'bio': {'eyebrow': 'Biografía',
+         'name': 'Rafa Montero de Espinosa',
+         'paragraphs': ['En marzo de 2024 empecé en la calistenia desde cero: no podía hacer ni una '
+                        'dominada ni un fondo. Entrenar con una planificación y trabajar la técnica '
+                        'cambió mi forma de progresar.',
+                        'Soy Rafa Montero de Espinosa, Teniente de Navío y entrenador. La disciplina '
+                        'forma parte de mi día a día, pero sé que cada persona tiene su propio ritmo. '
+                        'En Aura quiero ayudarte a encontrar el tuyo y avanzar con un objetivo claro.'],
+         'signature': 'Teniente de Navío · Entrenador',
+         'image': 'assets/rafa.webp',
+         'image_caption': ''},
+ 'program': {'title': 'Tu objetivo merece un plan propio.',
+             'lead': 'Desde tu primera dominada hasta esa skill que se resiste. Trabajamos con una '
+                     'planificación adaptada a tu punto de partida.',
+             'highlight_title': 'Un plan que evoluciona contigo.',
+             'highlight_text': 'Sesiones organizadas con ejercicios, series y progresiones para saber '
+                               'qué trabajar en cada entrenamiento.',
+             'bullets': ['Plan adaptado a tu nivel y objetivo.',
+                         'Registro de sesiones y progreso.',
+                         'Chat directo con tu entrenador.',
+                         'Revisión de dificultades y ajustes.'],
+             'image': 'assets/rafa-portada.webp',
+             'image_caption': 'Pino libre en acción'},
+ 'contact': {'email': 'rafamdeeales@gmail.com',
+             'phone': '+34 644 660 583',
+             'city': 'Sevilla, España',
+             'instagram': '@rafamdea'},
+ 'sponsors': [{'name': 'PULLUP&DIP',
+               'logo': 'LOGOS/pullupanddip.png',
+               'url': 'https://pullup-dip.com/?ref=pullup-dip.com%3Fref%3Drafamdea&utm_source=influenzer'},
+              {'name': 'ZUMUB', 'logo': 'LOGOS/zumub.png', 'url': 'https://www.zumub.com/ES/'}]}
+
 
 DEFAULT_VISIT_STATS = {
     "total_views": 0,
@@ -514,7 +515,7 @@ def is_valid_email(value: str) -> bool:
     return bool(EMAIL_RE.fullmatch(str(value or "").strip()))
 
 
-def db_connect():
+def open_db_connection():
     if not db_enabled():
         return None
     if psycopg is not None:
@@ -524,6 +525,30 @@ def db_connect():
         conn.autocommit = True
         return conn
     raise RuntimeError("DATABASE_URL está definido pero no hay driver PostgreSQL instalado (psycopg/psycopg2).")
+
+
+DB_REQUEST = threading.local()
+
+
+@contextmanager
+def db_connect():
+    request_scoped = getattr(DB_REQUEST, "active", False)
+    conn = getattr(DB_REQUEST, "connection", None) if request_scoped else None
+    if conn is None or conn.closed:
+        conn = open_db_connection()
+        if request_scoped:
+            DB_REQUEST.connection = conn
+    try:
+        yield conn
+    except Exception:
+        if conn is not None:
+            conn.close()
+        if request_scoped:
+            DB_REQUEST.connection = None
+        raise
+    finally:
+        if not request_scoped and conn is not None:
+            conn.close()
 
 
 def db_key_for_path(path: Path) -> str:
@@ -1023,6 +1048,26 @@ def normalize_content(content: dict | None) -> dict:
     default = copy_default_content()
     if not isinstance(content, dict):
         return default
+
+    content = copy.deepcopy(content)
+    for section, legacy in LEGACY_PUBLIC_CONTENT.items():
+        current = content.get(section)
+        if isinstance(legacy, list):
+            if current == legacy:
+                content[section] = copy.deepcopy(DEFAULT_CONTENT[section])
+        elif isinstance(current, dict):
+            for key, value in legacy.items():
+                if current.get(key) == value:
+                    current[key] = copy.deepcopy(DEFAULT_CONTENT[section][key])
+    for section, old_path, new_path in (
+        ("bio", "FOTOS/bio-creador.jpg", "assets/rafa.webp"),
+        ("program", "FOTOS/pino.jpg", "assets/rafa-portada.webp"),
+    ):
+        if isinstance(content.get(section), dict) and content[section].get("image") == old_path:
+            content[section]["image"] = new_path
+
+    if isinstance(content.get("program"), dict) and content["program"].get("image") == "assets/pino.webp":
+        content["program"]["image"] = "assets/rafa-portada.webp"
 
     hero = content.get("hero")
     if isinstance(hero, dict):
@@ -1635,8 +1680,6 @@ def get_session_user(cookie_header: str | None, cookie_name: str, role: str | No
     if not isinstance(raw_sessions, dict):
         raw_sessions = {}
     sessions = clean_sessions(raw_sessions)
-    if sessions != raw_sessions:
-        save_json(SESSIONS_PATH, sessions)
     data = sessions.get(token)
     if not data:
         return None
@@ -2595,27 +2638,27 @@ def render_portal_plan_item(item: dict, week_index: int, day_index: int, item_in
         exercises = item.get("exercises")
         if not isinstance(exercises, list):
             exercises = []
-        exercise_html = []
+        cards = []
         for sub_index, sub_item in enumerate(exercises, start=1):
             if not isinstance(sub_item, dict):
                 continue
-            exercise_html.append(render_portal_exercise_item(sub_item, week_index, day_index, item_index, sub_index))
-        if not exercise_html:
-            exercise_html.append('<p class="plan-empty">Bloque sin ejercicios.</p>')
-        return "\n".join(
-            [
-                f'            <section class="portal-block portal-block-{item_type}">',
-                '              <div class="portal-block-head">',
-                f'                <span class="portal-block-badge">{label}</span>',
-                f'                <h4>{name}</h4>',
-                "              </div>",
-                f'              <div class="plan-meta portal-block-meta">{block_meta}</div>' if block_meta else "",
-                '              <div class="portal-block-items">',
-                "\n".join(exercise_html),
-                "              </div>",
-                "            </section>",
-            ]
-        )
+            # Each exercise is a horizontal card, retaining its original block/sub index.
+            cards.append("\n".join([
+                f'<section class="portal-block portal-block-{item_type}">',
+                '  <div class="portal-block-head">',
+                f'    <span class="portal-block-badge">{label}</span>',
+                f'    <h4>{name}</h4>',
+                '  </div>',
+                f'  <p class="block-exercise-position">Ejercicio {sub_index} de {len(exercises)} del bloque</p>',
+                f'  <div class="plan-meta portal-block-meta">{block_meta}</div>' if block_meta else "",
+                '  <div class="portal-block-items">',
+                render_portal_exercise_item(sub_item, week_index, day_index, item_index, sub_index),
+                '  </div>',
+                '</section>',
+            ]))
+        if not cards:
+            return f'<section class="portal-block"><h4>{name}</h4><p class="plan-empty">Bloque sin ejercicios.</p></section>'
+        return "\n".join(cards)
     return render_portal_exercise_item(item, week_index, day_index, item_index)
 
 
@@ -2723,7 +2766,11 @@ def render_training_plan(plan: dict, active_week: int | None = None) -> str:
             if rest_flag or not isinstance(items, list) or not items:
                 parts.append('          <p class="plan-empty">Descanso o movilidad.</p>')
             if not rest_flag and isinstance(items, list) and items:
-                parts.append('          <div class="plan-items portal-items-row">')
+                track_id = f"day-exercises-{week_index}-{day_index}"
+                parts.append(f'<div class="day-exercise-navigation" data-day-navigation="{track_id}">')
+                parts.append(f'<p id="{track_id}-hint">↔ Desliza para ver los ejercicios de este día</p>')
+                parts.append('</div>')
+                parts.append(f'<div id="{track_id}" class="plan-items portal-items-row" data-day-exercises role="region" aria-label="Ejercicios del día {day_index}, semana {week_index}" aria-describedby="{track_id}-hint" tabindex="0">')
                 for item_index, item in enumerate(items, start=1):
                     if not isinstance(item, dict):
                         continue
@@ -2772,7 +2819,7 @@ def render_submission_media(submission: dict) -> str:
                 'loading="lazy" decoding="async">'
             )
         return (
-            f'<video data-src="{html.escape(src)}" autoplay loop muted playsinline preload="none"></video>'
+            f'<video data-src="{html.escape(src)}" muted playsinline preload="none"></video>'
         )
     if video_url:
         return (
@@ -2942,7 +2989,7 @@ def render_password_reset_page(query: dict[str, list[str]]) -> str:
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260615-portal-vertical\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260910-day-carousel-2\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -2965,7 +3012,7 @@ def render_password_reset_page(query: dict[str, list[str]]) -> str:
             "    <main class=\"section\">",
             f"      {card}",
             "    </main>",
-            "    <script src=\"/script.js?v=20260615-portal-vertical\"></script>",
+            "    <script src=\"/script.js?v=20260910-day-carousel-2\"></script>",
             "  </body>",
             "</html>",
         ]
@@ -2984,7 +3031,7 @@ def render_review_page(card_html: str, page_title: str = "Revisar solicitud - Au
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260615-portal-vertical\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260910-day-carousel-2\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -3007,7 +3054,7 @@ def render_review_page(card_html: str, page_title: str = "Revisar solicitud - Au
             "    <main class=\"section\">",
             f"      {card_html}",
             "    </main>",
-            "    <script src=\"/script.js?v=20260615-portal-vertical\"></script>",
+            "    <script src=\"/script.js?v=20260910-day-carousel-2\"></script>",
             "  </body>",
             "</html>",
         ]
@@ -3116,7 +3163,7 @@ def render_video_media(video: dict) -> str:
                 'loading="lazy" decoding="async">'
             )
         return (
-            f'<video data-src="{html.escape(src)}" autoplay loop muted playsinline preload="none"></video>'
+            f'<video data-src="{html.escape(src)}" muted playsinline preload="none"></video>'
         )
     if video_url:
         ext = Path(video_url).suffix.lower()
@@ -3127,7 +3174,14 @@ def render_video_media(video: dict) -> str:
                 'loading="lazy" decoding="async">'
             )
         if ext in ALLOWED_VIDEO_EXT:
-            return f'<video data-src="{src}" autoplay loop muted playsinline preload="none"></video>'
+            poster = ""
+            # Only use bundled posters for their exact local source, not uploaded clips.
+            local_path = Path(video_url)
+            if local_path.parent.as_posix() == "FOTOS":
+                poster_path = Path("assets") / (local_path.stem + "-poster.webp")
+                if (BASE_DIR / poster_path).is_file():
+                    poster = f' poster="/{html.escape(poster_path.as_posix())}"'
+            return f'<video data-src="{src}"{poster} muted playsinline preload="none"></video>'
     return PLACEHOLDER_SVG
 
 
@@ -3464,7 +3518,6 @@ def render_sponsors(sponsors: list[dict]) -> str:
 
 
 def render_index(query: dict[str, list[str]], cookie_header: str | None) -> str:
-    events = load_json(EVENTS_PATH, [])
     videos = load_json(VIDEOS_PATH, [])
     content = load_content()
     hero = content.get("hero", {})
@@ -3476,10 +3529,8 @@ def render_index(query: dict[str, list[str]], cookie_header: str | None) -> str:
     program_bullets = render_bullets(program.get("bullets", []))
     sponsors_html = render_sponsors(content.get("sponsors", []))
     replacements = {
-        "EVENTS": render_events(events),
         "VIDEOS": render_video_cards(videos),
         "FORM_ALERT": build_form_alert(query),
-        "ACCESS_CONTENT": render_access_section(query, cookie_header),
         "MEDIA_BASE_URL": html.escape(MEDIA_BASE_URL),
         "HERO_EYEBROW": html.escape(hero.get("eyebrow", "")),
         "HERO_TITLE": html.escape(hero.get("title", "")),
@@ -3499,6 +3550,10 @@ def render_index(query: dict[str, list[str]], cookie_header: str | None) -> str:
         "PROGRAM_IMAGE": html.escape(program.get("image", "")),
         "PROGRAM_IMAGE_CAPTION": html.escape(program.get("image_caption", "")),
         "SPONSORS": sponsors_html,
+        "CONTACT_WHATSAPP_URL": html.escape(
+            "https://wa.me/" + re.sub(r"\D", "", contact.get("phone", ""))
+            + "?" + urllib.parse.urlencode({"text": "Hola Rafa, me gustaría conocer tus entrenamientos personalizados."})
+        ),
         "CONTACT_EMAIL": html.escape(contact.get("email", "")),
         "CONTACT_PHONE": html.escape(contact.get("phone", "")),
         "CONTACT_CITY": html.escape(contact.get("city", "")),
@@ -4169,7 +4224,7 @@ def render_login_page(error: str | None = None) -> str:
             "    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
             "    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>",
             "    <link href=\"https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">",
-            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260615-portal-vertical\">",
+            "    <link rel=\"stylesheet\" href=\"/styles.css?v=20260910-day-carousel-2\">",
             "  </head>",
             "  <body class=\"admin-body\">",
             "    <div class=\"noise\" aria-hidden=\"true\"></div>",
@@ -4204,7 +4259,7 @@ def render_login_page(error: str | None = None) -> str:
             "        </form>",
             "      </div>",
             "    </main>",
-            "    <script src=\"/script.js?v=20260615-portal-vertical\"></script>",
+            "    <script src=\"/script.js?v=20260910-day-carousel-2\"></script>",
             "  </body>",
             "</html>",
         ]
@@ -4215,8 +4270,6 @@ def render_portal_page(query: dict[str, list[str]], cookie_header: str | None) -
     access_status = (query.get("access") or [""])[0]
     user_alert = build_access_alert(access_status, "user")
     portal_user = get_session_user(cookie_header, USER_SESSION_COOKIE, "user")
-    applications = load_applications()
-
     if not portal_user:
         forgot_block = render_forgot_password_block("portal")
         login_card = "\n".join(
@@ -4244,11 +4297,13 @@ def render_portal_page(query: dict[str, list[str]], cookie_header: str | None) -
             PORTAL_TEMPLATE,
             {
                 "PORTAL_CONTENT": login_card,
+                "PORTAL_VIEW_CLASS": "portal-login-view",
                 "PORTAL_NAV_ACTIONS": "",
                 "PORTAL_HOME_HREF": "/",
             },
         )
 
+    applications = load_applications()
     app = find_application(applications, portal_user) or {}
     week_param = (query.get("week") or [""])[0]
     try:
@@ -4303,6 +4358,7 @@ def render_portal_page(query: dict[str, list[str]], cookie_header: str | None) -
         {
             "PORTAL_CONTENT": portal_content,
             "PORTAL_NAV_ACTIONS": nav_actions,
+            "PORTAL_VIEW_CLASS": "portal-active-view",
             "PORTAL_HOME_HREF": "/portal",
         },
     )
@@ -5546,8 +5602,67 @@ def move_item_by_id(items: list[dict], item_id: str, direction: str) -> tuple[li
 
 
 class AuraHandler(SimpleHTTPRequestHandler):
+    def handle_one_request(self) -> None:
+        DB_REQUEST.active = True
+        DB_REQUEST.connection = None
+        try:
+            super().handle_one_request()
+        finally:
+            conn = getattr(DB_REQUEST, "connection", None)
+            DB_REQUEST.active = False
+            DB_REQUEST.connection = None
+            if conn is not None:
+                conn.close()
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(BASE_DIR), **kwargs)
+
+    def send_head(self):
+        self._range_remaining = None
+        path = Path(self.translate_path(self.path))
+        range_header = self.headers.get("Range", "")
+        if (not range_header or self.headers.get("If-Range")
+                or path.suffix.lower() not in ALLOWED_VIDEO_EXT or not path.is_file()):
+            return super().send_head()
+        match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header.strip())
+        if not match or not any(match.groups()):
+            return super().send_head()
+        size = path.stat().st_size
+        first, last = match.groups()
+        if first:
+            start = int(first)
+            end = min(int(last), size - 1) if last else size - 1
+        else:
+            start = max(0, size - int(last))
+            end = size - 1
+        if start >= size or start > end:
+            self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+            self.send_header("Content-Range", f"bytes */{size}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return None
+        stream = path.open("rb")
+        stream.seek(start)
+        self._range_remaining = end - start + 1
+        self.send_response(HTTPStatus.PARTIAL_CONTENT)
+        self.send_header("Content-Type", self.guess_type(str(path)))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Content-Length", str(self._range_remaining))
+        self.send_header("Last-Modified", self.date_time_string(path.stat().st_mtime))
+        self.end_headers()
+        return stream
+
+    def copyfile(self, source, outputfile):
+        remaining = getattr(self, "_range_remaining", None)
+        if remaining is None:
+            return super().copyfile(source, outputfile)
+        while remaining > 0:
+            chunk = source.read(min(64 * 1024, remaining))
+            if not chunk:
+                break
+            outputfile.write(chunk)
+            remaining -= len(chunk)
 
     def end_headers(self) -> None:
         path = urllib.parse.urlparse(self.path).path.lower()
@@ -5580,7 +5695,18 @@ class AuraHandler(SimpleHTTPRequestHandler):
         extra_headers: list[tuple[str, str]] | None = None,
     ) -> None:
         encoded = content.encode("utf-8")
+        accepted = self.headers.get("Accept-Encoding", "")
+        use_gzip = any(
+            item.split(";")[0].strip() == "gzip"
+            and not re.search(r";\s*q=0(?:\.0*)?(?:\s|$)", item)
+            for item in accepted.split(",")
+        ) and len(encoded) > 1024
+        if use_gzip:
+            encoded = gzip.compress(encoded, compresslevel=5)
         self.send_response(status)
+        self.send_header("Vary", "Accept-Encoding")
+        if use_gzip:
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(encoded)))
         if extra_headers:
@@ -6260,19 +6386,19 @@ class AuraHandler(SimpleHTTPRequestHandler):
         concerns = data.get("concerns", "").strip()
 
         if not all([username, password, email, skill, goal]):
-            self.redirect("/?status=error&message=Faltan campos obligatorios")
+            self.redirect("/?status=error&message=Faltan campos obligatorios#registro")
             return
         if not is_valid_email(email):
-            self.redirect("/?status=error&message=Email inválido")
+            self.redirect("/?status=error&message=Email inválido#registro")
             return
 
         applications = load_applications()
         for app in applications:
             if app.get("username", "").lower() == username.lower():
-                self.redirect("/?status=error&message=Usuario ya registrado")
+                self.redirect("/?status=error&message=Usuario ya registrado#registro")
                 return
             if app.get("email", "").lower() == email.lower():
-                self.redirect("/?status=error&message=Email ya registrado")
+                self.redirect("/?status=error&message=Email ya registrado#registro")
                 return
 
         salt, pw_hash = hash_password(password)
@@ -6297,27 +6423,18 @@ class AuraHandler(SimpleHTTPRequestHandler):
         missing = smtp_missing_fields(smtp_settings)
         if missing:
             detail = urllib.parse.quote(f"Faltan variables en Render: {', '.join(missing)}")
-            self.redirect(f"/?status=smtp_incomplete&message={detail}")
+            self.redirect(f"/?status=smtp_incomplete&message={detail}#registro")
             return
         if not smtp_settings.get("enabled"):
-            self.redirect("/?status=smtp_disabled")
+            self.redirect("/?status=smtp_disabled#registro")
             return
-        ok, reason = notify_application(
-            application,
-            smtp_settings,
+        run_background_job(
+            notify_application,
+            clone_json_data(application),
+            clone_json_data(smtp_settings),
             public_base_url=self.get_public_base_url(),
         )
-        if ok:
-            self.redirect("/?status=ok")
-            return
-        if reason == "smtp_incomplete":
-            detail = urllib.parse.quote("Faltan variables SMTP (HOST/USER/PASS).")
-            self.redirect(f"/?status=smtp_incomplete&message={detail}")
-            return
-        if reason == "smtp_disabled":
-            self.redirect("/?status=smtp_disabled")
-            return
-        self.redirect("/?status=smtp_error")
+        self.redirect("/?status=ok#registro")
 
     def handle_admin_login(self) -> None:
         data, _ = parse_post_data(self)

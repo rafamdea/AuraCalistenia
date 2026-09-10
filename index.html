@@ -1,186 +1,53 @@
 <!doctype html>
 <html lang="es">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AuraCalistenia</title>
-    <script>
-      document.documentElement.classList.add("js");
-    </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/styles.css?v=20260615-portal-vertical">
-  </head>
-  <body data-media-base-url="{{MEDIA_BASE_URL}}">
-    <div class="noise" aria-hidden="true"></div>
-    <header class="nav">
-      <div class="nav-inner">
-        <nav class="nav-group nav-left">
-          <a href="#inicio">Inicio</a>
-          <a href="#bio">Bio</a>
-          <a href="#programa">Programa</a>
-          <a href="#galeria">Vídeos</a>
-        </nav>
-        <a class="nav-brand" href="#inicio" aria-label="AuraCalistenia">
-          <span class="brand-mark" aria-hidden="true"></span>
-        </a>
-        <nav class="nav-group nav-right">
-          <a href="#eventos">Eventos</a>
-          <a href="#contacto">Contacto</a>
-          <a href="/legal.html">Legal</a>
-          <a href="/portal">Portal</a>
-        </nav>
-        <nav class="nav-group nav-compact" aria-label="Secciones">
-          <a href="#inicio">Inicio</a>
-          <a href="#bio">Bio</a>
-          <a href="#programa">Programa</a>
-          <a href="#galeria">Vídeos</a>
-          <a href="#eventos">Eventos</a>
-          <a href="#contacto">Contacto</a>
-          <a href="/legal.html">Legal</a>
-          <a href="/portal">Portal</a>
-        </nav>
-      </div>
-    </header>
-
-    <main>
-      <section id="inicio" class="section hero reveal">
-        <div class="hero-orb" aria-hidden="true"></div>
-        <div class="hero-grid" aria-hidden="true"></div>
-        <div class="container hero-content" data-stagger>
-          <div class="hero-copy">
-            <p class="eyebrow stagger-item">{{HERO_EYEBROW}}</p>
-            <h1 class="stagger-item">{{HERO_TITLE}}</h1>
-            <p class="lead stagger-item">{{HERO_SUBTITLE}}</p>
-          </div>
-          <div class="hero-actions stagger-item">
-            <a class="btn glass primary hero-register-btn" href="#registro">Registrarse</a>
-          </div>
-          <div class="hero-stats" data-stagger>
-            {{HERO_STATS}}
-          </div>
-        </div>
-      </section>
-
-      <section id="bio" class="section bio reveal">
-        <div class="container bio-grid" data-stagger>
-          <div class="bio-text stagger-item">
-            <p class="eyebrow">{{BIO_EYEBROW}}</p>
-            <h2>{{BIO_NAME}}</h2>
-            {{BIO_PARAGRAPHS}}
-            <div class="signature glass">{{BIO_SIGNATURE}}</div>
-          </div>
-          <div class="bio-portrait stagger-item">
-            <div class="portrait-frame glass-card">
-              <img src="{{BIO_IMAGE}}" alt="Rafa Montero de Espinosa en acción" loading="lazy" decoding="async">
-            </div>
-            <div class="portrait-caption">{{BIO_IMAGE_CAPTION}}</div>
-          </div>
-        </div>
-      </section>
-
-      <section id="programa" class="section program reveal">
-        <div class="container">
-          <div class="section-header" data-stagger>
-            <p class="eyebrow stagger-item">Programa</p>
-            <h2 class="stagger-item">{{PROGRAM_TITLE}}</h2>
-            <p class="lead stagger-item">{{PROGRAM_LEAD}}</p>
-          </div>
-
-          <div class="program-spotlight" data-stagger>
-            <div class="program-highlight glass-card stagger-item">
-              <h3>{{PROGRAM_HIGHLIGHT_TITLE}}</h3>
-              <p>{{PROGRAM_HIGHLIGHT_TEXT}}</p>
-              <ul class="program-list">
-                {{PROGRAM_BULLETS}}
-              </ul>
-            </div>
-            <div class="program-image glass-card stagger-item">
-              <img src="{{PROGRAM_IMAGE}}" alt="Rafa en pino libre" loading="lazy" decoding="async">
-              <span class="program-image-caption">{{PROGRAM_IMAGE_CAPTION}}</span>
-            </div>
-          </div>
-
-          <div class="progression-grid" data-stagger>
-            <article class="progression-card glass-card stagger-item">
-              <div class="progression-media">
-                <video data-src="progresion-pino/progresion-1.mp4" data-mobile-src="mobile-media/progresion-pino/progresion-1.mp4" autoplay loop muted playsinline preload="none"></video>
-              </div>
-              <div class="progression-meta">
-                <span class="progression-step">Progresión 1</span>
-                <h3>Pike pushups</h3>
-                <p>Construimos fuerza de hombro y empuje vertical para soportar el peso del cuerpo.</p>
-              </div>
-            </article>
-            <article class="progression-card glass-card stagger-item">
-              <div class="progression-media">
-                <video data-src="progresion-pino/progresion-2.mp4" autoplay loop muted playsinline preload="none"></video>
-              </div>
-              <div class="progression-meta">
-                <span class="progression-step">Progresión 2</span>
-                <h3>Tiradas a pino asistidas</h3>
-                <p>Trabajamos la entrada al pino con asistencia para coordinar impulso y alineación.</p>
-              </div>
-            </article>
-            <article class="progression-card glass-card stagger-item">
-              <div class="progression-media">
-                <video data-src="progresion-pino/progresion-3.mp4" data-mobile-src="mobile-media/progresion-pino/progresion-3.mp4" autoplay loop muted playsinline preload="none"></video>
-              </div>
-              <div class="progression-meta">
-                <span class="progression-step">Progresión 3</span>
-                <h3>Flexiones de pino asistidas</h3>
-                <p>Reforzamos la potencia con flexiones asistidas para ganar control en la línea.</p>
-              </div>
-            </article>
-            <article class="progression-card glass-card stagger-item">
-              <div class="progression-media">
-                <video data-src="progresion-pino/progresion-4.mp4" data-mobile-src="mobile-media/progresion-pino/progresion-4.mp4" autoplay loop muted playsinline preload="none"></video>
-              </div>
-              <div class="progression-meta">
-                <span class="progression-step">Progresión 4</span>
-                <h3>Equilibrio en pino libre</h3>
-                <p>Movemos el cuerpo en pino para soportar tensión y mantener el equilibrio con las manos.</p>
-              </div>
-            </article>
-          </div>
-
-          <div id="registro" class="register-anchor" aria-hidden="true"></div>
-          <div class="form-card glass-card reveal" data-stagger>
-            <div class="form-header stagger-item">
-              <h3>Cómo apuntarte al programa</h3>
-              <p>Completa la solicitud con tu skill y objetivo principal. Respondo con los siguientes pasos.</p>
-            </div>
-            <ol class="join-steps">
-              <li>Elige tu skill y define tu objetivo principal.</li>
-              <li>Cuenta tu problema o inquietud para ajustar el plan.</li>
-              <li>Recibirás respuesta con los siguientes pasos.</li>
-            </ol>
-            <div class="register-guide glass">
-              <p class="register-guide-title">Importante</p>
-              <ul class="register-guide-list">
-                <li>Te responderemos por correo siempre: si estás aceptado o si no.</li>
-                <li>Si estás aceptado, ese correo trae la guía paso a paso para entrar al portal.</li>
-                <li>También te explicamos qué hay dentro y para qué sirve cada parte.</li>
-                <li>Si no lo ves al momento, revisa spam o promociones.</li>
-              </ul>
-            </div>
-            <!-- {{FORM_ALERT}} -->
-            <form class="apply-form" action="/apply" method="post">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aura Calistenia · Entrenamiento personalizado con Rafa</title>
+  <meta name="description" content="Entrenamiento de calistenia personalizado con Rafa Montero de Espinosa. Un plan adaptado a tu nivel, seguimiento y un objetivo claro: seguir progresando.">
+  <link rel="stylesheet" href="/landing.css?v=20260909-carousels">
+  <script src="/landing.js?v=20260909-carousels" defer></script>
+</head>
+<body data-media-base-url="{{MEDIA_BASE_URL}}">
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+<header class="site-header"><div class="container navigation">
+  <a class="wordmark" href="#inicio" aria-label="Aura Calistenia, inicio">aura<span>CALISTENIA</span></a>
+  <nav aria-label="Navegación principal"><a href="#programa">Entrenamiento</a><a href="#bio">Sobre mí</a><a href="#galeria">En acción</a></nav>
+  <a class="portal-link" href="/portal">Área de alumnos <span aria-hidden="true">↗</span></a>
+</div></header>
+<main id="contenido">
+<section id="inicio" class="hero container">
+  <div class="hero-copy"><p class="eyebrow"><span class="status-dot"></span> {{HERO_EYEBROW}}</p>
+    <h1>{{HERO_TITLE}}</h1><p class="lead">{{HERO_SUBTITLE}}</p>
+    <div class="actions"><a class="btn primary" href="#registro">Quiero mi entrenamiento <span aria-hidden="true">↗</span></a><a class="text-link" href="#programa">Así trabajamos <span aria-hidden="true">↓</span></a></div>
+    <p class="hero-note">Tu punto de partida es suficiente. El siguiente paso lo damos juntos.</p>
+    <div class="hero-stats">{{HERO_STATS}}</div>
+  </div>
+  <figure class="hero-photo hero-photo--portrait"><img src="{{PROGRAM_IMAGE}}" alt="Rafa en un parque de calistenia al aire libre" width="1600" height="2133" fetchpriority="high" decoding="async"><figcaption><span>FUERZA · TÉCNICA · CONSTANCIA</span><strong>El progreso se entrena.</strong></figcaption><span class="photo-index" aria-hidden="true">A / 01</span></figure>
+</section>
+<div class="discipline-strip"><div class="container"><span>UN PLAN. TU OBJETIVO.</span><span>FUERZA</span><i aria-hidden="true">✳</i><span>CONTROL</span><i aria-hidden="true">✳</i><span>CALISTENIA</span></div></div>
+<section id="programa" class="section container">
+  <div class="section-heading"><p class="eyebrow">01 / Tu entrenamiento</p><h2>{{PROGRAM_TITLE}}</h2><p class="lead">{{PROGRAM_LEAD}}</p></div>
+  <div class="service-grid"><article><span class="step-number">01</span><h3>Partimos de ti.</h3><p>Tu nivel, tus objetivos, el material que tienes y el tiempo que puedes dedicar. Ese es el inicio de tu plan.</p></article><article><span class="step-number">02</span><h3>Entrenas con dirección.</h3><p>{{PROGRAM_HIGHLIGHT_TEXT}}</p></article><article><span class="step-number">03</span><h3>Seguimos tu progreso.</h3><p>Registra tus entrenamientos en el portal y cuéntame cómo vas. Revisamos tus dificultades y resolvemos dudas por el chat.</p></article></div>
+  <div class="included"><div><p class="eyebrow">Más que una rutina</p><h3>{{PROGRAM_HIGHLIGHT_TITLE}}</h3></div><ul>{{PROGRAM_BULLETS}}</ul><a class="text-link" href="#registro">Empezar con Rafa ↗</a></div>
+</section>
+<section id="bio" class="bio-section"><div class="container bio-grid"><figure><img src="{{BIO_IMAGE}}" alt="Rafa Montero de Espinosa, entrenador de Aura" width="1000" height="1333" loading="lazy" decoding="async"><figcaption>{{BIO_SIGNATURE}}</figcaption></figure><div><p class="eyebrow">02 / Detrás de Aura</p><h2>{{BIO_NAME}}</h2><p class="bio-intro">Yo también empecé desde cero.</p>{{BIO_PARAGRAPHS}}<a class="text-link" href="{{CONTACT_WHATSAPP_URL}}" target="_blank" rel="noopener">Hablemos de tu objetivo ↗</a></div></div></section>
+<section id="galeria" class="section container"><div class="section-heading split-heading"><div><p class="eyebrow">03 / Del plan a la práctica</p><h2>Esto se construye.<br>Repetición a repetición.</h2></div><p>Fuerza, equilibrio y técnica en movimiento. Explora los vídeos y dale al play para ver cada entrenamiento.</p></div><div class="gallery-navigation"><p id="video-scroll-hint"><span aria-hidden="true">↔</span> Desliza para ver más vídeos</p><div class="gallery-controls"><span class="gallery-count" aria-live="polite"></span><button type="button" class="carousel-arrow" data-video-prev aria-label="Vídeos anteriores" aria-controls="video-carousel" hidden>←</button><button type="button" class="carousel-arrow" data-video-next aria-label="Vídeos siguientes" aria-controls="video-carousel" hidden>→</button></div></div><div id="video-carousel" class="video-arena" role="region" aria-label="Vídeos de entrenamiento" aria-describedby="video-scroll-hint" tabindex="0">{{VIDEOS}}</div><noscript><p>Activa JavaScript para reproducir los vídeos.</p></noscript></section>
+<section id="registro" class="section enquiry-section"><div class="container enquiry-grid"><div><p class="eyebrow">04 / Tu siguiente paso</p><h2>Vamos a por<br>tu próximo logro.</h2><p class="lead">Cuéntame qué quieres conseguir y te explicaré cómo podemos trabajar juntos.</p><div class="price-note"><h3>Entrenamiento personalizado de pago</h3><p>La propuesta, el precio y las condiciones se acuerdan contigo antes de empezar.</p></div><a class="btn primary" href="{{CONTACT_WHATSAPP_URL}}" target="_blank" rel="noopener">Hablar por WhatsApp ↗</a><p class="small-note">¿Ya entrenas en Aura? <a href="/portal">Entra a tu área de alumno.</a></p></div><div class="form-card"><p class="eyebrow">O déjame tu solicitud</p><h3>Cuéntame tu objetivo</h3><p class="form-intro">Crea tus datos de acceso y te responderé por correo con los siguientes pasos.</p>{{FORM_ALERT}}
+<form class="apply-form" action="/apply" method="post">
               <div class="form-row">
                 <div class="form-field">
                   <label for="username">Usuario</label>
-                  <input id="username" name="username" type="text" placeholder="Tu usuario" required>
+                  <input id="username" name="username" autocomplete="username" type="text" placeholder="Tu usuario" required>
                 </div>
                 <div class="form-field">
                   <label for="password">Contraseña</label>
-                  <input id="password" name="password" type="password" placeholder="Tu contraseña" required>
+                  <input id="password" name="password" autocomplete="new-password" type="password" placeholder="Tu contraseña" required>
                 </div>
               </div>
               <div class="form-row">
                 <div class="form-field">
                   <label for="email">Email</label>
-                  <input id="email" name="email" type="email" placeholder="tu@email.com" required>
+                  <input id="email" name="email" autocomplete="email" type="email" placeholder="tu@email.com" required>
                 </div>
                 <div class="form-field">
                   <label for="skill">Skill objetivo</label>
@@ -212,181 +79,12 @@
               </div>
               <button class="btn glass primary" type="submit">Enviar solicitud</button>
               <p class="form-note">
-                Tu contraseña se cifra y no se comparte. Recibirás confirmación cuando se revise tu solicitud.
+                Al enviar la solicitud todavía no realizas ningún pago. Te confirmaré la propuesta y las condiciones por correo.
               </p>
             </form>
-          </div>
-        </div>
-      </section>
-
-      <section id="galeria" class="section gallery reveal">
-        <div class="container">
-          <div class="section-header" data-stagger>
-            <p class="eyebrow stagger-item">Galería épica</p>
-            <h2 class="stagger-item">Vídeos de calistenia</h2>
-            <p class="lead stagger-item">
-              Clips reales de técnica, fuerza y control para encender tu ambición y empujarte al siguiente nivel.
-            </p>
-          </div>
-
-          <div class="video-arena" data-stagger>
-            <!-- FALLBACK_VIDEOS_START -->
-            <div class="video-card tall stagger-item">
-              <div class="video-thumb">
-                <video data-src="FOTOS/dominadas.mp4" data-mobile-src="mobile-media/FOTOS/dominadas.mp4" autoplay loop muted playsinline preload="none"></video>
-              </div>
-              <div class="video-meta">
-                <span class="tag glass-pill">Dominadas</span>
-                <h3>Disciplina en la barra</h3>
-                <p>Serie limpia con foco militar.</p>
-              </div>
-            </div>
-            <div class="video-card wide stagger-item">
-              <div class="video-thumb">
-                <video data-src="FOTOS/muscle-up.mp4" autoplay loop muted playsinline preload="none"></video>
-              </div>
-              <div class="video-meta">
-                <span class="tag glass-pill">Muscle up</span>
-                <h3>Transición precisa</h3>
-                <p>Explosivo y controlado.</p>
-              </div>
-            </div>
-            <div class="video-card stagger-item">
-              <div class="video-thumb">
-                <video data-src="FOTOS/pino-video.mp4" data-mobile-src="mobile-media/FOTOS/pino-video.mp4" autoplay loop muted playsinline preload="none"></video>
-              </div>
-              <div class="video-meta">
-                <span class="tag glass-pill">Pino</span>
-                <h3>Línea en silencio</h3>
-                <p>Balance y respiración.</p>
-              </div>
-            </div>
-            <div class="video-card tall stagger-item">
-              <div class="video-thumb">
-                <video data-src="FOTOS/front-lever.mp4" autoplay loop muted playsinline preload="none"></video>
-              </div>
-              <div class="video-meta">
-                <span class="tag glass-pill">Front lever</span>
-                <h3>Horizonte quieto</h3>
-                <p>Control total en estáticos.</p>
-              </div>
-            </div>
-            <div class="video-card wide stagger-item">
-              <div class="video-thumb">
-                <video data-src="FOTOS/fondos.mp4" data-mobile-src="mobile-media/FOTOS/fondos.mp4" autoplay loop muted playsinline preload="none"></video>
-              </div>
-              <div class="video-meta">
-                <span class="tag glass-pill">Fondos</span>
-                <h3>Fondo profundo</h3>
-                <p>Ritmo de resistencia brutal.</p>
-              </div>
-            </div>
-            <div class="video-card stagger-item">
-              <div class="video-thumb">
-                <video data-src="FOTOS/back-lever.mp4" data-mobile-src="mobile-media/FOTOS/back-lever.mp4" autoplay loop muted playsinline preload="none"></video>
-              </div>
-              <div class="video-meta">
-                <span class="tag glass-pill">Back lever</span>
-                <h3>Reversa total</h3>
-                <p>Control posterior con aura.</p>
-              </div>
-            </div>
-            <!-- FALLBACK_VIDEOS_END -->
-            <!-- {{VIDEOS}} -->
-          </div>
-        </div>
-      </section>
-
-      <section id="eventos" class="section events reveal">
-        <div class="container">
-          <div class="section-header" data-stagger>
-            <p class="eyebrow stagger-item">Noticias</p>
-            <h2 class="stagger-item">Eventos nacionales y europeos</h2>
-            <p class="lead stagger-item">
-              Fechas clave para competir, ver exhibiciones y conectar con la escena.
-            </p>
-          </div>
-
-          <div class="news-grid" data-stagger>
-            <!-- FALLBACK_EVENTS_START -->
-            <article class="news-card glass-card stagger-item">
-              <span class="news-date">16-19 ABR 2026 - Colonia, Alemania</span>
-              <h3>Calisthenics Cup 2026</h3>
-              <p>FIBO Fitness Convention.</p>
-              <span class="news-tag">Europa</span>
-            </article>
-            <article class="news-card glass-card stagger-item">
-              <span class="news-date">MAR/ABR 2026 - Málaga, España</span>
-              <h3>Copa Málaga</h3>
-              <p>Fecha prevista entre marzo y abril.</p>
-              <span class="news-tag">Nacional</span>
-            </article>
-            <article class="news-card glass-card stagger-item">
-              <span class="news-date">14-15 MAR 2026 - O Porto, Portugal</span>
-              <h3>Endurance Battles</h3>
-              <p>Eagle Calisthenics.</p>
-              <span class="news-tag">Europa</span>
-            </article>
-            <!-- FALLBACK_EVENTS_END -->
-            <!-- {{EVENTS}} -->
-          </div>
-        </div>
-      </section>
-
-      <section id="patrocinio" class="section sponsors reveal">
-        <div class="container">
-          <div class="section-header" data-stagger>
-            <p class="eyebrow stagger-item">Patrocinio</p>
-            <h2 class="stagger-item">Patrocinadores</h2>
-            <p class="lead stagger-item">
-              Alianzas con equipos, ropa técnica y tecnología para entrenar mejor.
-            </p>
-          </div>
-
-          <div class="sponsor-grid" data-stagger>
-            {{SPONSORS}}
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <footer id="contacto" class="footer">
-      <div class="container footer-grid">
-        <div>
-          <h3>Contacto directo</h3>
-          <p>Entrena en vivo, recibe seguimiento y accede a eventos privados.</p>
-        </div>
-        <div class="contact-card glass-card">
-          <p><strong>Email:</strong> {{CONTACT_EMAIL}}</p>
-          <p><strong>Teléfono:</strong> {{CONTACT_PHONE}}</p>
-          <p><strong>Ciudad:</strong> {{CONTACT_CITY}}</p>
-          <p><strong>Instagram:</strong> {{CONTACT_INSTAGRAM}}</p>
-          <a
-            class="btn glass primary whatsapp-btn"
-            href="https://wa.me/34644660583?text=Hola%20buenas.%20Me%20pongo%20en%20contacto%20contigo%20en%20relaci%C3%B3n%20con%20el%20planning%20de%204%20semanas%20de%20entrenamiento"
-            target="_blank"
-            rel="noopener"
-          >
-            <span class="whatsapp-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" focusable="false">
-                <circle cx="12" cy="12" r="11"></circle>
-                <path d="M7.2 7.2h2.3l1.2 3.1-1.4 1.4c.9 1.7 2.3 3.1 4 4l1.4-1.4 3.1 1.2v2.3c0 .5-.4.9-.9.9C11.4 18.7 5.3 12.6 5.3 8.1c0-.5.4-.9.9-.9z"></path>
-              </svg>
-            </span>
-            WhatsApp directo
-          </a>
-        </div>
-      </div>
-      <div class="footer-bottom">
-        <span>AuraCalistenia - 2026</span>
-        <div class="footer-legal-links">
-          <a href="/legal.html#aviso-legal">Aviso legal</a>
-          <a href="/legal.html#privacidad">Privacidad</a>
-          <a href="/legal.html#cookies">Cookies</a>
-        </div>
-      </div>
-    </footer>
-
-    <script src="/script.js?v=20260615-portal-vertical"></script>
-  </body>
-</html>
+<p class="privacy-note">Consulta cómo tratamos tus datos en la <a href="/legal.html#privacidad">política de privacidad</a>.</p></div></div></section>
+<section class="section container faq-section"><p class="eyebrow">Antes de empezar</p><h2>Es normal tener dudas.</h2><div class="faq-list"><details><summary>¿Necesito experiencia en calistenia?</summary><p>No. Partimos de tu nivel actual, tanto si buscas tu primera dominada como si quieres mejorar una habilidad concreta.</p></details><details><summary>¿Cómo accedo a mi entrenamiento?</summary><p>Cuando confirmemos tu incorporación, recibirás las instrucciones de acceso al portal. Allí tendrás el plan, el registro de progreso y el chat con el entrenador.</p></details><details><summary>¿Cuánto cuesta y cómo se contrata?</summary><p>Es un servicio de pago personalizado. Escríbeme o envía la solicitud para recibir una propuesta con el precio y las condiciones antes de contratar.</p></details><details><summary>¿Necesito entrenar en un gimnasio?</summary><p>Cuéntame dónde entrenas y qué material tienes. Lo tendremos en cuenta al preparar la propuesta.</p></details></div></section>
+<section class="partners container" aria-label="Marcas que acompañan a Aura"><div class="partners-heading"><span>Marcas que acompañan a Aura</span><button type="button" class="sponsor-toggle" aria-pressed="false" hidden>Pausar carrusel</button></div><div class="sponsor-grid">{{SPONSORS}}</div></section>
+</main>
+<footer id="contacto"><div class="container footer-top"><a class="wordmark" href="#inicio">aura<span>CALISTENIA</span></a><div><h2>Nos vemos en las barras.</h2><a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a></div><div><p>{{CONTACT_CITY}}</p><p>{{CONTACT_PHONE}}</p><p>{{CONTACT_INSTAGRAM}}</p></div></div><div class="container footer-bottom"><span>© 2026 Aura Calistenia</span><nav aria-label="Información legal"><a href="/legal.html#aviso-legal">Aviso legal</a><a href="/legal.html#privacidad">Privacidad</a><a href="/legal.html#cookies">Cookies</a></nav></div></footer>
+</body></html>

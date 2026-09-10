@@ -51,3 +51,27 @@ Se añadió `legal.html` con:
 - política de cookies.
 
 Revisa y personaliza esos textos con tus datos fiscales/legales reales antes de publicar en producción.
+
+## Renovación de septiembre de 2026
+
+La portada usa `landing.css` y `landing.js`, independientes del código del portal.
+Presenta el entrenamiento personalizado de pago; precio y condiciones se acuerdan
+con el entrenador. Conserva el formulario `/apply` y el acceso `/portal`.
+Las referencias exactas a la antigua promoción se actualizan al leer el contenido,
+también si está guardado en Neon. Los textos personalizados se mantienen.
+Los eventos antiguos dejan de mostrarse en la portada; siguen disponibles en administración.
+
+Las imágenes optimizadas y las miniaturas están en `assets/`. Los vídeos se cargan
+al pulsar, y las respuestas de vídeo soportan rangos de bytes. El HTML se comprime
+si el navegador admite gzip. Las consultas reutilizan una conexión PostgreSQL por
+petición; se cierra al terminar y no se comparte entre usuarios. El acceso anónimo
+al portal no lee los alumnos. Las solicitudes se guardan antes de enviar el correo
+en segundo plano; los fallos SMTP se consultan en administración.
+
+Comprobaciones locales: `python3 -m unittest discover -s tests -v`.
+Arranque: `python3 app.py` (puerto 8000 por defecto). Al desplegar, incluir `assets/`,
+`landing.css`, `landing.js` y las plantillas actualizadas junto con `app.py` y los
+archivos existentes. No reemplazar los datos de alumnos.
+
+Las pruebas locales no miden el arranque en frío del alojamiento ni la latencia
+real entre Render y Neon; esas mediciones requieren comprobar el despliegue.

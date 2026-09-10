@@ -7,24 +7,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/styles.css?v=20260615-portal-vertical">
+    <link rel="stylesheet" href="/styles.css?v=20260910-day-carousel-2">
   </head>
-  <body class="admin-body portal-body">
+  <body class="admin-body portal-body {{PORTAL_VIEW_CLASS}}">
     <div class="noise" aria-hidden="true"></div>
     <header class="nav">
-      <div class="nav-inner">
-        <nav class="nav-group nav-left"></nav>
-        <a class="nav-brand" href="{{PORTAL_HOME_HREF}}" aria-label="AuraCalistenia">
-          <span class="brand-mark" aria-hidden="true"></span>
-        </a>
-        <nav class="nav-group nav-right">
-          <a href="/?from=portal">Página principal</a>
-          <a href="{{PORTAL_HOME_HREF}}">Inicio</a>
-          {{PORTAL_NAV_ACTIONS}}
-        </nav>
-        <nav class="nav-group nav-compact" aria-label="Navegación">
-          <a href="/?from=portal">Página principal</a>
-          <a href="{{PORTAL_HOME_HREF}}">Inicio</a>
+      <div class="nav-inner portal-navigation">
+        <a class="portal-wordmark" href="{{PORTAL_HOME_HREF}}" aria-label="Aura Calistenia">aura<span>CALISTENIA</span></a>
+        <nav class="portal-nav-links" aria-label="Navegación del portal">
+          <a href="/?from=portal">Volver a la web</a>
           {{PORTAL_NAV_ACTIONS}}
         </nav>
       </div>
@@ -33,14 +24,14 @@
     <main class="section">
       <div class="container admin-header" data-stagger>
         <p class="eyebrow">Panel alumno</p>
-        <h1>AURA CALISTENIA</h1>
-        <p class="lead">En este espacio podrás ver tus 4 semanas de entrenamiento guiado y totalmente personalizado. Puedes minimizar/maximizar la semana, seleccionar una en concreto o todas, marcar si fallaste o no y por qué y un gráfico con tu progreso. Por último, un chat con el entrenador, para todas tus dudas.</p>
+        <h1>Tu espacio para progresar.</h1>
+        <p class="lead">Tu entrenamiento, tu progreso y tu entrenador. Consulta tu plan, registra cada sesión y resuelve tus dudas desde un mismo lugar.</p>
       </div>
 
       <div class="container portal-stack">
         {{PORTAL_CONTENT}}
       </div>
     </main>
-    <script src="/script.js?v=20260615-portal-vertical"></script>
+    <script src="/script.js?v=20260910-day-carousel-2"></script>
   </body>
 </html>

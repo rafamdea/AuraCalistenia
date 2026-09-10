@@ -8,3 +8,6 @@ recovery_backups/
 
 *.zip
 ziiFu6gF
+
+# Local social-video exports and demonstration captures
+/promo-aura/

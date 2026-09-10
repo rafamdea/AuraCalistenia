@@ -226,6 +226,57 @@ document.addEventListener("DOMContentLoaded", () => {
     updateCue();
   };
 
+  // One independent native carousel per training day. Forms keep their normal gestures.
+  document.querySelectorAll("[data-day-exercises]").forEach((track) => {
+    const navigation = track.previousElementSibling;
+    const cards = Array.from(track.children);
+    const controls = document.createElement("div");
+    controls.className = "day-exercise-controls";
+    const count = document.createElement("span");
+    count.className = "day-exercise-count";
+    const previous = document.createElement("button");
+    const next = document.createElement("button");
+    [previous, next].forEach((button) => {
+      button.type = "button";
+      button.className = "day-exercise-arrow";
+      button.setAttribute("aria-controls", track.id);
+    });
+    previous.textContent = "←";
+    next.textContent = "→";
+    previous.setAttribute("aria-label", "Ejercicio anterior");
+    next.setAttribute("aria-label", "Ejercicio siguiente");
+    controls.append(count, previous, next);
+    navigation.append(controls);
+    const positions = () => cards.map((card) => card.getBoundingClientRect().left - track.getBoundingClientRect().left + track.scrollLeft);
+    const update = () => {
+      const max = Math.max(0, track.scrollWidth - track.clientWidth);
+      const overflow = max > 2;
+      previous.disabled = track.scrollLeft <= 2;
+      next.disabled = track.scrollLeft >= max - 2;
+      previous.hidden = next.hidden = !overflow;
+      const current = positions().reduce((best, position, index, all) => Math.abs(position - track.scrollLeft) < Math.abs(all[best] - track.scrollLeft) ? index : best, 0);
+      count.textContent = overflow ? `${current + 1} / ${cards.length}` : `${cards.length} ${cards.length === 1 ? "ejercicio" : "ejercicios"}`;
+      navigation.querySelector("p").hidden = !overflow;
+    };
+    const move = (direction) => {
+      const all = positions();
+      const target = direction > 0
+        ? all.find((position) => position > track.scrollLeft + 8)
+        : all.slice().reverse().find((position) => position < track.scrollLeft - 8);
+      track.scrollTo({left: target ?? (direction > 0 ? track.scrollWidth : 0), behavior: prefersReducedMotion ? "instant" : "smooth"});
+    };
+    previous.addEventListener("click", () => move(-1));
+    next.addEventListener("click", () => move(1));
+    track.addEventListener("keydown", (event) => {
+      if (event.target !== track || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      event.preventDefault();
+      move(event.key === "ArrowRight" ? 1 : -1);
+    });
+    track.addEventListener("scroll", update, {passive:true});
+    new ResizeObserver(update).observe(track);
+    update();
+  });
+
   const horizontalTrackSelector = ".video-arena, .progression-grid";
   const horizontalTrackShellClass = "horizontal-track-shell";
 
@@ -338,217 +389,26 @@ document.addEventListener("DOMContentLoaded", () => {
     return true;
   };
 
-  const safePlayVideo = (video) => {
-    if (prefersReducedMotion) {
-      return;
-    }
-    if (!ensureVideoSource(video)) {
-      return;
-    }
-    const playPromise = video.play();
-    if (playPromise && playPromise.catch) {
-      playPromise.catch(() => {});
-    }
-  };
-
-  const pauseVideo = (video) => {
-    if (!video.paused) {
-      video.pause();
-    }
-    video.dataset.inViewport = "false";
-    const wrapper =
-      video.closest(".video-thumb") || video.closest(".progression-media");
-    if (wrapper) {
-      wrapper.classList.remove("is-looping");
-    }
-  };
-
-  const setupLoopIndicator = (video) => {
-    const wrapper =
-      video.closest(".video-thumb") || video.closest(".progression-media");
-    if (!wrapper) {
-      return;
-    }
-    if (!wrapper.querySelector(".video-loop-indicator")) {
-      const indicator = document.createElement("span");
-      indicator.className = "video-loop-indicator";
-      wrapper.appendChild(indicator);
-    }
-    const safePlay = () => {
-      if (video.dataset.inViewport !== "true") {
-        return;
-      }
-      safePlayVideo(video);
-    };
-    video.loop = false;
-    video.removeAttribute("loop");
-    video.addEventListener("ended", () => {
-      wrapper.classList.add("is-looping");
-      window.setTimeout(() => {
-        video.currentTime = 0;
-        safePlay();
-      }, 200);
-    });
-    const clearIndicator = () => wrapper.classList.remove("is-looping");
-    video.addEventListener("playing", clearIndicator);
-    video.addEventListener("play", clearIndicator);
-  };
-
-  ensureHorizontalTrackShells();
-  ensureHorizontalTrackHints();
-
-  const allVideos = Array.from(document.querySelectorAll("video"));
-  const featuredVideos = allVideos.filter(
-    (video) => video.closest(".progression-grid") || video.closest(".video-arena")
-  );
-  allVideos.forEach((video) => {
+  document.querySelectorAll("video").forEach((video) => {
+    video.autoplay = false;
+    video.removeAttribute("autoplay");
     video.preload = "none";
-    lockMute(video);
-    setupLoopIndicator(video);
-    video.dataset.inViewport = "false";
-    video.dataset.isVisible = "false";
-    video.dataset.visibilityRatio = "0";
-    pauseVideo(video);
+    const play = document.createElement("button");
+    play.type = "button";
+    play.className = "btn video-start";
+    play.textContent = "Reproducir vídeo";
+    video.after(play);
+    play.addEventListener("click", async () => {
+      if (!ensureVideoSource(video)) return;
+      document.querySelectorAll("video").forEach((other) => { if (other !== video) other.pause(); });
+      video.controls = true;
+      try { await video.play(); play.hidden = true; }
+      catch { play.textContent = "Reintentar vídeo"; }
+    });
   });
-
-  const syncVideoPlayback = () => {
-    if (prefersReducedMotion || !allVideos.length) {
-      return;
-    }
-    const visibleVideos = allVideos.filter((video) => video.dataset.isVisible === "true");
-    const allowedVideos = new Set();
-    const groupedVideos = new Map();
-
-    visibleVideos.forEach((video) => {
-      const track =
-        video.closest(".video-arena, .progression-grid") ||
-        video.parentElement ||
-        document.body;
-      const key = track;
-      const current = groupedVideos.get(key) || [];
-      current.push(video);
-      groupedVideos.set(key, current);
-    });
-
-    groupedVideos.forEach((videos, track) => {
-      const limit =
-        track instanceof Element && track.matches(".video-arena, .progression-grid")
-          ? (lowPerfDevice || window.innerWidth < 1024 ? 1 : 2)
-          : videos.length;
-      videos
-        .sort(
-          (left, right) =>
-            Number(right.dataset.visibilityRatio || 0) - Number(left.dataset.visibilityRatio || 0)
-        )
-        .slice(0, limit)
-        .forEach((video) => allowedVideos.add(video));
-    });
-
-    allVideos.forEach((video) => {
-      if (allowedVideos.has(video)) {
-        video.dataset.inViewport = "true";
-        safePlayVideo(video);
-        return;
-      }
-      pauseVideo(video);
-    });
-  };
-  let videoPlaybackSyncRaf = 0;
-  const scheduleVideoPlaybackSync = () => {
-    if (videoPlaybackSyncRaf) {
-      return;
-    }
-    videoPlaybackSyncRaf = window.requestAnimationFrame(() => {
-      videoPlaybackSyncRaf = 0;
-      syncVideoPlayback();
-    });
-  };
-
-  const primeFeaturedVideos = () => {
-    const batchSize = window.innerWidth >= 901 ? 3 : featuredVideos.length || 1;
-    featuredVideos.forEach((video, index) => {
-      const delay = Math.floor(index / batchSize) * 120;
-      window.setTimeout(() => {
-        ensureVideoSource(video);
-      }, delay);
-    });
-  };
-
-  const initDesktopScrollPerfMode = () => {
-    if (!document.body) {
-      return;
-    }
-    let scrollTimer = 0;
-    const enableScrollMode = () => {
-      if (window.innerWidth < 901) {
-        document.body.classList.remove("is-scrolling");
-        return;
-      }
-      document.body.classList.add("is-scrolling");
-      if (scrollTimer) {
-        window.clearTimeout(scrollTimer);
-      }
-      scrollTimer = window.setTimeout(() => {
-        document.body.classList.remove("is-scrolling");
-        scrollTimer = 0;
-      }, 140);
-    };
-
-    window.addEventListener("scroll", enableScrollMode, { passive: true });
-    window.addEventListener("wheel", enableScrollMode, { passive: true });
-    window.addEventListener("resize", () => {
-      if (window.innerWidth < 901) {
-        document.body.classList.remove("is-scrolling");
-      }
-    });
-  };
-
-  if (!prefersReducedMotion && allVideos.length) {
-    const scheduleFeaturedVideos = () => {
-      if (!featuredVideos.length) {
-        return;
-      }
-      if (!lowPerfDevice && window.innerWidth >= 1024 && "requestIdleCallback" in window) {
-        window.requestIdleCallback(primeFeaturedVideos, { timeout: 1400 });
-        return;
-      }
-      window.setTimeout(primeFeaturedVideos, 220);
-    };
-
-    if (document.readyState === "complete") {
-      scheduleFeaturedVideos();
-    } else {
-      window.addEventListener("load", scheduleFeaturedVideos, { once: true });
-    }
-
-    const videoObserver = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const video = entry.target;
-          const isVisible = entry.isIntersecting && entry.intersectionRatio >= 0.25;
-          video.dataset.isVisible = isVisible ? "true" : "false";
-          video.dataset.visibilityRatio = isVisible ? String(entry.intersectionRatio || 0) : "0";
-          if (!isVisible) {
-            pauseVideo(video);
-          }
-        });
-        scheduleVideoPlaybackSync();
-      },
-      {
-        threshold: [0, 0.25, 0.5, 0.75],
-        rootMargin: "220px 0px 220px 0px",
-      }
-    );
-    allVideos.forEach((video) => videoObserver.observe(video));
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) {
-        allVideos.forEach((video) => pauseVideo(video));
-        return;
-      }
-      scheduleVideoPlaybackSync();
-    });
-    window.addEventListener("resize", scheduleVideoPlaybackSync);
-  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) document.querySelectorAll("video").forEach((video) => video.pause());
+  });
 
   const resolveHorizontalTrack = (target) => {
     if (!(target instanceof Element)) {
@@ -730,8 +590,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
-  initScrollDownCue();
-  initDesktopScrollPerfMode();
+
+
   bindHorizontalTrackHintEvents();
   bindPointerDragTracks();
   syncHorizontalDragHints();

@@ -3,12 +3,12 @@
   --green-800: #0b241a;
   --green-700: #0f3d2e;
   --green-500: #0b7a5a;
-  --green-300: #4af1ad;
-  --black: #050706;
-  --white: #f2f7f3;
+  --green-300: #087553;
+  --black: #f7f8f2;
+  --white: #193f31;
   --glass: rgba(255, 255, 255, 0.12);
   --glass-border: rgba(255, 255, 255, 0.28);
-  --shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  --shadow: 0 4px 18px rgba(20, 55, 36, 0.06);
   --section-radius: 36px;
 }
 
@@ -56,7 +56,7 @@ main {
   height: 28px;
   border-radius: 999px;
   border: 1px solid rgba(74, 241, 173, 0.36);
-  background: rgba(6, 16, 12, 0.72);
+  background: #f0f4ed;
   color: var(--green-300);
   display: inline-flex;
   align-items: center;
@@ -119,14 +119,14 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.3em;
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(25, 63, 49, 0.7);
   margin-bottom: 12px;
 }
 
 .lead {
   font-size: 1.1rem;
   max-width: 640px;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(25, 63, 49, 0.82);
 }
 
 h1,
@@ -199,7 +199,7 @@ h3 {
 .glass-card,
 .glass-pill {
   position: relative;
-  background: linear-gradient(135deg, rgba(17, 61, 46, 0.8), rgba(6, 14, 11, 0.8));
+  background: #edf3e9;
   border: 1px solid rgba(255, 255, 255, 0.16);
   backdrop-filter: blur(12px) saturate(125%);
   -webkit-backdrop-filter: blur(12px) saturate(125%);
@@ -221,7 +221,7 @@ h3 {
 }
 
 .btn.primary {
-  background: linear-gradient(135deg, rgba(76, 242, 172, 0.35), rgba(8, 66, 48, 0.4));
+  background: #edf3e9;
   border: 1px solid rgba(90, 248, 176, 0.6);
   color: var(--white);
 }
@@ -238,7 +238,7 @@ h3 {
   z-index: 10;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  background: rgba(5, 7, 6, 0.75);
+  background: #f0f4ed;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -334,7 +334,7 @@ h3 {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(74, 241, 173, 0.9), rgba(9, 43, 32, 0.2));
+  background: #edf3e9;
   box-shadow: 0 0 20px rgba(74, 241, 173, 0.7);
 }
 
@@ -363,8 +363,7 @@ h3 {
   display: flex;
   align-items: center;
   padding-top: 140px;
-  background: radial-gradient(circle at 20% 20%, rgba(15, 71, 54, 0.9), transparent 55%),
-    linear-gradient(160deg, #050806 0%, #04140e 35%, #060908 100%);
+  background: #edf3e9;
 }
 
 .hero::before {
@@ -386,7 +385,7 @@ h3 {
   width: 420px;
   height: 420px;
   border-radius: 40% 60% 50% 50%;
-  background: linear-gradient(130deg, rgba(10, 90, 66, 0.4), rgba(4, 10, 7, 0));
+  background: #edf3e9;
   filter: blur(10px);
   animation: float 8s ease-in-out infinite;
 }
@@ -398,7 +397,7 @@ h3 {
   width: 260px;
   height: 260px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(74, 241, 173, 0.35), rgba(7, 20, 15, 0));
+  background: #edf3e9;
   filter: blur(20px);
   animation: orbit 9s ease-in-out infinite;
 }
@@ -520,11 +519,11 @@ h3 {
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.2em;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(25, 63, 49, 0.7);
 }
 
 .bio {
-  background: linear-gradient(135deg, rgba(10, 26, 19, 0.9), rgba(5, 8, 7, 0.95));
+  background: #edf3e9;
 }
 
 .bio::before {
@@ -592,7 +591,7 @@ h3 {
 
 .portrait-caption {
   font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(25, 63, 49, 0.7);
   text-align: center;
 }
 
@@ -601,7 +600,7 @@ h3 {
 }
 
 .program {
-  background: linear-gradient(160deg, rgba(6, 18, 13, 0.95), rgba(3, 7, 5, 0.98));
+  background: #edf3e9;
   overflow: visible;
 }
 
@@ -633,7 +632,7 @@ h3 {
   display: grid;
   gap: 8px;
   margin-top: 8px;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(25, 63, 49, 0.78);
 }
 
 .program-list li {
@@ -669,7 +668,7 @@ h3 {
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.18em;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(25, 63, 49, 0.6);
 }
 
 .progression-grid {
@@ -720,7 +719,7 @@ h3 {
 }
 
 .progression-meta p {
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(25, 63, 49, 0.75);
 }
 
 .join-steps {
@@ -734,10 +733,10 @@ h3 {
 .join-steps li {
   position: relative;
   line-height: 1.45;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(25, 63, 49, 0.82);
   border-radius: 14px;
   border: 1px solid rgba(74, 241, 173, 0.18);
-  background: rgba(6, 16, 11, 0.54);
+  background: #f0f4ed;
   padding: 11px 12px 11px 44px;
 }
 
@@ -763,7 +762,7 @@ h3 {
   margin-top: 2px;
   border-radius: 18px;
   border: 1px solid rgba(74, 241, 173, 0.25);
-  background: linear-gradient(140deg, rgba(74, 241, 173, 0.12), rgba(6, 15, 11, 0.72));
+  background: #edf3e9;
   padding: 14px 16px;
 }
 
@@ -772,7 +771,7 @@ h3 {
   font-size: 0.8rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(224, 255, 239, 0.95);
+  color: rgba(45, 74, 57, 0.95);
 }
 
 .register-guide-list {
@@ -780,7 +779,7 @@ h3 {
   padding-left: 18px;
   display: grid;
   gap: 6px;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(25, 63, 49, 0.78);
 }
 
 .register-guide-list li {
@@ -828,7 +827,7 @@ h3 {
 }
 
 .gallery {
-  background: radial-gradient(circle at 30% 20%, rgba(12, 64, 48, 0.9), rgba(4, 8, 6, 0.98) 60%);
+  background: #edf3e9;
 }
 
 .gallery::before {
@@ -890,8 +889,8 @@ h3 {
   height: 36px;
   border-radius: 999px;
   border: 1px solid rgba(74, 241, 173, 0.28);
-  background: rgba(6, 16, 11, 0.72);
-  color: rgba(233, 248, 239, 0.96);
+  background: #f0f4ed;
+  color: rgba(45, 74, 57, 0.96);
   display: grid;
   place-items: center;
   font-size: 1.2rem;
@@ -931,7 +930,7 @@ h3 {
   padding: 20px;
   border-radius: 28px;
   border: 1px solid rgba(74, 241, 173, 0.2);
-  background: linear-gradient(160deg, rgba(12, 38, 28, 0.9), rgba(5, 8, 7, 0.95));
+  background: #edf3e9;
   box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
   transition: transform 0.6s ease, box-shadow 0.6s ease;
   scroll-snap-align: start;
@@ -956,7 +955,7 @@ h3 {
   overflow: hidden;
   margin-bottom: 16px;
   position: relative;
-  background: rgba(6, 15, 11, 0.75);
+  background: #f0f4ed;
   min-height: 220px;
   contain: paint;
 }
@@ -1004,7 +1003,7 @@ h3 {
 }
 
 .events {
-  background: linear-gradient(145deg, rgba(5, 9, 7, 0.98), rgba(10, 34, 26, 0.9));
+  background: #edf3e9;
 }
 
 .events::before {
@@ -1040,7 +1039,7 @@ h3 {
 }
 
 .access {
-  background: linear-gradient(140deg, rgba(6, 12, 9, 0.98), rgba(10, 40, 30, 0.92));
+  background: #edf3e9;
 }
 
 .access::before {
@@ -1062,7 +1061,7 @@ h3 {
   width: 380px;
   height: 380px;
   border-radius: 30%;
-  background: linear-gradient(120deg, rgba(12, 64, 48, 0.5), transparent 70%);
+  background: #edf3e9;
   filter: blur(6px);
   animation: float 12s ease-in-out infinite;
 }
@@ -1086,7 +1085,7 @@ h3 {
   display: grid;
   gap: 8px;
   font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(25, 63, 49, 0.75);
 }
 
 .portal-actions {
@@ -1098,7 +1097,7 @@ h3 {
 .forgot-password-block {
   border-radius: 14px;
   border: 1px solid rgba(74, 241, 173, 0.2);
-  background: rgba(6, 16, 11, 0.56);
+  background: #f0f4ed;
   padding: 10px 12px;
 }
 
@@ -1108,7 +1107,7 @@ h3 {
   font-size: 0.72rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(25, 63, 49, 0.82);
 }
 
 .forgot-password-block summary::-webkit-details-marker {
@@ -1142,7 +1141,7 @@ h3 {
   font-size: 0.75rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(25, 63, 49, 0.6);
 }
 
 .training-board {
@@ -1155,7 +1154,7 @@ h3 {
   margin-top: 20px;
   border-radius: 20px;
   border: 1px solid rgba(74, 241, 173, 0.2);
-  background: rgba(6, 16, 11, 0.65);
+  background: #f0f4ed;
   padding: 14px;
 }
 
@@ -1165,7 +1164,7 @@ h3 {
   font-size: 0.75rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(25, 63, 49, 0.82);
 }
 
 .portal-collapsible summary::-webkit-details-marker {
@@ -1195,13 +1194,13 @@ h3 {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(25, 63, 49, 0.62);
 }
 
 .training-filter select {
   border-radius: 999px;
   border: 1px solid rgba(74, 241, 173, 0.22);
-  background: rgba(6, 15, 11, 0.72);
+  background: #f0f4ed;
   color: var(--white);
   padding: 8px 12px;
   font-family: inherit;
@@ -1215,7 +1214,7 @@ h3 {
 .training-week {
   border-radius: 24px;
   border: 1px solid rgba(74, 241, 173, 0.2);
-  background: linear-gradient(160deg, rgba(8, 30, 22, 0.9), rgba(4, 8, 6, 0.9));
+  background: #edf3e9;
   box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
@@ -1232,7 +1231,7 @@ h3 {
   gap: 12px;
   align-items: stretch;
   padding: 16px 18px;
-  background: rgba(9, 24, 18, 0.72);
+  background: #f0f4ed;
   border-bottom: 1px solid rgba(74, 241, 173, 0.18);
 }
 
@@ -1248,7 +1247,7 @@ h3 {
   border-radius: 12px;
   border: 1px solid rgba(74, 241, 173, 0.24);
   background: rgba(74, 241, 173, 0.1);
-  color: rgba(232, 249, 240, 0.92);
+  color: rgba(45, 74, 57, 0.92);
   padding: 8px 6px;
   min-width: 42px;
   display: inline-flex;
@@ -1332,7 +1331,7 @@ h3 {
   position: absolute;
   inset: 13px;
   border-radius: 999px;
-  background: rgba(8, 18, 13, 0.96);
+  background: #f0f4ed;
 }
 
 .week-donut span {
@@ -1373,7 +1372,7 @@ h3 {
 .day-card {
   padding: 14px;
   border-radius: 16px;
-  background: rgba(7, 20, 15, 0.8);
+  background: #f0f4ed;
   border: 1px solid rgba(74, 241, 173, 0.18);
   display: grid;
   gap: 12px;
@@ -1394,17 +1393,17 @@ h3 {
   font-size: 0.64rem;
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(25, 63, 49, 0.7);
 }
 
 .day-mini-stats {
   font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(25, 63, 49, 0.72);
 }
 
 .day-card p {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(25, 63, 49, 0.75);
 }
 
 .portal-item {
@@ -1419,7 +1418,7 @@ h3 {
   padding: 14px;
   border-radius: 18px;
   border: 1px solid rgba(74, 241, 173, 0.24);
-  background: linear-gradient(160deg, rgba(10, 36, 25, 0.9), rgba(5, 12, 9, 0.86));
+  background: #edf3e9;
 }
 
 .portal-block-head {
@@ -1454,7 +1453,7 @@ h3 {
 }
 
 .portal-block-unbroken .portal-block-badge {
-  color: #fcd34d;
+  color: #88620c;
   border-color: rgba(252, 211, 77, 0.34);
   background: rgba(180, 83, 9, 0.16);
 }
@@ -1475,7 +1474,7 @@ h3 {
 
 .portal-save-state {
   min-height: 16px;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(25, 63, 49, 0.62);
   font-size: 0.72rem;
 }
 
@@ -1488,11 +1487,11 @@ h3 {
   padding: 8px 12px;
   border-radius: 999px;
   border: 1px solid rgba(74, 241, 173, 0.24);
-  background: linear-gradient(120deg, rgba(74, 241, 173, 0.14), rgba(6, 16, 11, 0.6));
+  background: #edf3e9;
   font-size: 0.67rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(233, 248, 239, 0.84);
+  color: rgba(45, 74, 57, 0.84);
 }
 
 .horizontal-drag-hint::before {
@@ -1589,7 +1588,7 @@ h3 {
 
 .item-status.pending {
   border-color: rgba(172, 182, 200, 0.6);
-  color: rgba(216, 223, 237, 0.88);
+  color: rgba(45, 74, 57, 0.88);
 }
 
 .item-status-form {
@@ -1614,7 +1613,7 @@ h3 {
 
 .item-status-note {
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(25, 63, 49, 0.75);
 }
 
 .submission-list {
@@ -1643,7 +1642,7 @@ h3 {
   font-size: 0.7rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(25, 63, 49, 0.6);
 }
 
 .submission-media {
@@ -1659,7 +1658,7 @@ h3 {
 
 .submission-user {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.65);
+  color: rgba(25, 63, 49, 0.65);
 }
 
 .comment-list {
@@ -1672,7 +1671,7 @@ h3 {
 .comment-list li {
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(6, 14, 11, 0.7);
+  background: #f0f4ed;
   border: 1px solid rgba(74, 241, 173, 0.15);
 }
 
@@ -1681,13 +1680,13 @@ h3 {
   font-size: 0.65rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(25, 63, 49, 0.5);
   margin-bottom: 6px;
 }
 
 .comment-list p {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(25, 63, 49, 0.75);
 }
 
 .chat-panel {
@@ -1720,19 +1719,19 @@ h3 {
   font-size: 0.66rem;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(25, 63, 49, 0.7);
 }
 
 .chat-time {
   font-size: 0.64rem;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(25, 63, 49, 0.55);
 }
 
 .chat-empty {
   padding: 12px;
   border-radius: 10px;
   border: 1px dashed rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.58);
+  color: rgba(25, 63, 49, 0.58);
 }
 
 .news-grid {
@@ -1747,7 +1746,7 @@ h3 {
   padding: 22px 26px;
   border-radius: 20px;
   border: 1px solid rgba(74, 241, 173, 0.18);
-  background: linear-gradient(120deg, rgba(8, 26, 19, 0.85), rgba(5, 8, 7, 0.95));
+  background: #edf3e9;
   box-shadow: inset 0 0 0 1px rgba(74, 241, 173, 0.08), 0 18px 40px rgba(0, 0, 0, 0.35);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -1772,7 +1771,7 @@ h3 {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.25em;
-  color: rgba(255, 255, 255, 0.68);
+  color: rgba(25, 63, 49, 0.68);
   margin-bottom: 6px;
 }
 
@@ -1786,7 +1785,7 @@ h3 {
 }
 
 .sponsors {
-  background: linear-gradient(160deg, rgba(6, 15, 12, 0.95), rgba(4, 8, 6, 0.98));
+  background: #edf3e9;
 }
 
 .sponsors::before {
@@ -1820,12 +1819,12 @@ h3 {
 
 .sponsor-grid::before {
   left: 0;
-  background: linear-gradient(90deg, rgba(4, 10, 8, 0.96), rgba(4, 10, 8, 0));
+  background: #edf3e9;
 }
 
 .sponsor-grid::after {
   right: 0;
-  background: linear-gradient(270deg, rgba(4, 10, 8, 0.96), rgba(4, 10, 8, 0));
+  background: #edf3e9;
 }
 
 .sponsor-marquee {
@@ -1886,8 +1885,8 @@ h3 {
   padding: 10px 14px;
   border-radius: 999px;
   border: 1px solid rgba(74, 241, 173, 0.65);
-  background: linear-gradient(135deg, rgba(74, 241, 173, 0.2), rgba(10, 30, 22, 0.8));
-  color: #dfffee;
+  background: #edf3e9;
+  color: #145b3e;
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -1962,7 +1961,7 @@ h3 {
   font-size: 0.85rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(25, 63, 49, 0.5);
   display: grid;
   gap: 12px;
   justify-items: center;
@@ -1976,7 +1975,7 @@ h3 {
 }
 
 .footer-legal-links a {
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(25, 63, 49, 0.72);
   text-decoration: none;
   letter-spacing: 0.08em;
   text-transform: none;
@@ -1995,7 +1994,7 @@ h3 {
 .legal-card {
   padding: 22px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(9, 17, 13, 0.7);
+  background: #f0f4ed;
 }
 
 .legal-card h2 {
@@ -2004,7 +2003,7 @@ h3 {
 }
 
 .legal-card p {
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(25, 63, 49, 0.78);
   margin-bottom: 10px;
 }
 
@@ -2028,7 +2027,7 @@ h3 {
 
 .form-header p {
   max-width: 640px;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(25, 63, 49, 0.78);
 }
 
 .apply-form,
@@ -2049,7 +2048,7 @@ h3 {
   font-size: 0.75rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(25, 63, 49, 0.7);
 }
 
 .checkbox-field {
@@ -2057,7 +2056,7 @@ h3 {
   align-items: center;
   gap: 10px;
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(25, 63, 49, 0.7);
 }
 
 .checkbox-field input {
@@ -2074,7 +2073,7 @@ h3 {
   border-radius: 16px;
   border: 1px solid rgba(74, 241, 173, 0.22);
   padding: 12px 14px;
-  background: rgba(6, 15, 11, 0.7);
+  background: #f0f4ed;
   color: var(--white);
   font-size: 0.95rem;
   font-family: inherit;
@@ -2083,7 +2082,7 @@ h3 {
 
 .apply-form input::placeholder,
 .admin-form input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(25, 63, 49, 0.5);
 }
 
 .apply-form input:focus,
@@ -2117,7 +2116,7 @@ h3 {
 
 .form-note {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(25, 63, 49, 0.6);
 }
 
 .btn.small {
@@ -2242,7 +2241,7 @@ h3 {
   padding: 18px;
   border-radius: 18px;
   border: 1px solid rgba(74, 241, 173, 0.16);
-  background: rgba(6, 16, 11, 0.55);
+  background: #f0f4ed;
   display: grid;
   gap: 12px;
 }
@@ -2252,14 +2251,14 @@ h3 {
   font-size: 1rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(25, 63, 49, 0.8);
 }
 
 .plan-week-block {
   padding: 18px;
   border-radius: 20px;
   border: 1px solid rgba(74, 241, 173, 0.18);
-  background: rgba(5, 12, 9, 0.65);
+  background: #f0f4ed;
   display: grid;
   gap: 16px;
 }
@@ -2305,13 +2304,13 @@ h3 {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.18em;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(25, 63, 49, 0.6);
 }
 
 .plan-tool-row select {
   border-radius: 999px;
   border: 1px solid rgba(74, 241, 173, 0.2);
-  background: rgba(6, 15, 11, 0.7);
+  background: #f0f4ed;
   color: var(--white);
   padding: 8px 12px;
   font-family: inherit;
@@ -2319,14 +2318,14 @@ h3 {
 
 .plan-tool-note {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(25, 63, 49, 0.55);
 }
 
 .plan-current-user {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.18em;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(25, 63, 49, 0.7);
 }
 
 .plan-current-user strong {
@@ -2370,7 +2369,7 @@ h3 {
 .plan-day-card {
   border-radius: 18px;
   border: 1px solid rgba(74, 241, 173, 0.16);
-  background: rgba(6, 16, 11, 0.65);
+  background: #f0f4ed;
   display: grid;
   gap: 12px;
   padding: 16px;
@@ -2387,14 +2386,14 @@ h3 {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.2em;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(25, 63, 49, 0.6);
 }
 
 .plan-day-title {
   border-radius: 12px;
   border: 1px solid rgba(74, 241, 173, 0.2);
   padding: 9px 11px;
-  background: rgba(6, 15, 11, 0.65);
+  background: #f0f4ed;
   color: var(--white);
   font-size: 0.9rem;
   font-family: inherit;
@@ -2407,7 +2406,7 @@ h3 {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(25, 63, 49, 0.6);
 }
 
 .plan-rest-toggle input {
@@ -2444,7 +2443,7 @@ h3 {
 .plan-rest-note {
   display: none;
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(25, 63, 49, 0.6);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -2501,7 +2500,7 @@ h3 {
   font-size: 0.62rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.56);
+  color: rgba(25, 63, 49, 0.56);
 }
 
 .coachapp-field input,
@@ -2509,7 +2508,7 @@ h3 {
   width: 100%;
   border: 1px solid rgba(74, 241, 173, 0.18);
   border-radius: 12px;
-  background: rgba(2, 9, 6, 0.6);
+  background: #f0f4ed;
   color: var(--white);
   padding: 9px 10px;
   font: inherit;
@@ -2539,7 +2538,7 @@ h3 {
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(25, 63, 49, 0.82);
   cursor: pointer;
   font-size: 1.1rem;
   line-height: 1;
@@ -2547,7 +2546,7 @@ h3 {
 
 .coachapp-icon-button:hover {
   border-color: rgba(255, 111, 111, 0.45);
-  color: #ffd1d1;
+  color: #9f3636;
 }
 
 .coachapp-block-card {
@@ -2625,13 +2624,13 @@ h3 {
 
 .plan-empty {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(25, 63, 49, 0.6);
 }
 
 .plan-item {
   padding: 10px 12px;
   border-radius: 14px;
-  background: rgba(6, 18, 12, 0.7);
+  background: #f0f4ed;
   border: 1px solid rgba(74, 241, 173, 0.14);
   display: grid;
   gap: 6px;
@@ -2648,7 +2647,7 @@ h3 {
   flex-wrap: wrap;
   gap: 6px;
   font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(25, 63, 49, 0.75);
 }
 
 .plan-meta span {
@@ -2686,11 +2685,11 @@ h3 {
 
 .coach-stats span {
   font-size: 0.82rem;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(25, 63, 49, 0.75);
   border: 1px solid rgba(74, 241, 173, 0.18);
   border-radius: 999px;
   padding: 7px 12px;
-  background: rgba(8, 18, 13, 0.72);
+  background: #f0f4ed;
 }
 
 .coach-stats strong {
@@ -2702,7 +2701,7 @@ h3 {
   border-radius: 14px;
   border: 1px solid rgba(74, 241, 173, 0.22);
   padding: 10px 12px;
-  background: rgba(6, 15, 11, 0.7);
+  background: #f0f4ed;
   color: var(--white);
   font-size: 0.92rem;
 }
@@ -2724,7 +2723,7 @@ h3 {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   padding: 16px;
-  background: rgba(8, 18, 14, 0.42);
+  background: #f0f4ed;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
@@ -2750,8 +2749,8 @@ h3 {
   margin: 10px 0 0;
   padding: 12px;
   border-radius: 8px;
-  background: rgba(2, 8, 6, 0.72);
-  color: rgba(235, 255, 246, 0.92);
+  background: #f0f4ed;
+  color: rgba(45, 74, 57, 0.92);
   font-size: 0.82rem;
   line-height: 1.5;
 }
@@ -2769,7 +2768,7 @@ h3 {
   font-size: 0.64rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(25, 63, 49, 0.55);
 }
 
 .storage-pill strong {
@@ -2778,7 +2777,7 @@ h3 {
 
 .storage-pill span {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.74);
+  color: rgba(25, 63, 49, 0.74);
   word-break: break-word;
 }
 
@@ -2791,7 +2790,7 @@ h3 {
   font-size: 0.68rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(25, 63, 49, 0.7);
 }
 
 .storage-pill-debug pre {
@@ -2799,7 +2798,7 @@ h3 {
   padding: 8px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(6, 15, 11, 0.6);
+  background: #f0f4ed;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", monospace;
   font-size: 0.67rem;
@@ -2826,7 +2825,7 @@ h3 {
 .coach-progress-card {
   border: 1px solid rgba(74, 241, 173, 0.18);
   border-radius: 18px;
-  background: rgba(7, 18, 13, 0.65);
+  background: #f0f4ed;
   padding: 14px;
   display: grid;
   gap: 10px;
@@ -2846,7 +2845,7 @@ h3 {
 .coach-progress-tools select {
   border-radius: 999px;
   border: 1px solid rgba(74, 241, 173, 0.24);
-  background: rgba(6, 15, 11, 0.72);
+  background: #f0f4ed;
   color: var(--white);
   padding: 7px 12px;
   font-family: inherit;
@@ -2881,7 +2880,7 @@ h3 {
   position: absolute;
   inset: 15px;
   border-radius: 999px;
-  background: rgba(8, 18, 13, 0.96);
+  background: #f0f4ed;
 }
 
 .coach-progress-donut span {
@@ -2906,7 +2905,7 @@ h3 {
 }
 
 .coach-progress-kpis .wait {
-  color: rgba(200, 209, 224, 0.85);
+  color: rgba(45, 74, 57, 0.85);
 }
 
 .admin-list {
@@ -2931,14 +2930,14 @@ h3 {
   gap: 12px;
   padding: 12px 14px;
   border-radius: 16px;
-  background: rgba(8, 20, 14, 0.6);
+  background: #f0f4ed;
   border: 1px solid rgba(74, 241, 173, 0.16);
 }
 
 .admin-item span {
   display: block;
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(25, 63, 49, 0.7);
 }
 
 .admin-actions {
@@ -2982,13 +2981,13 @@ h3 {
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid rgba(74, 241, 173, 0.14);
-  background: rgba(8, 20, 14, 0.62);
+  background: #f0f4ed;
 }
 
 .admin-collapsible-summary::after {
   content: "▾";
   font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.65);
+  color: rgba(25, 63, 49, 0.65);
   transition: transform 0.2s ease;
 }
 
@@ -3013,7 +3012,7 @@ h3 {
 
 .admin-collapsible-main span {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.64);
+  color: rgba(25, 63, 49, 0.64);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3039,8 +3038,8 @@ h3 {
   border-radius: 12px;
   padding: 10px 12px;
   border: 1px solid rgba(74, 241, 173, 0.18);
-  background: rgba(6, 15, 11, 0.72);
-  color: rgba(204, 244, 228, 0.95);
+  background: #f0f4ed;
+  color: rgba(45, 74, 57, 0.95);
   font-size: 0.78rem;
   white-space: pre-wrap;
   word-break: break-word;
@@ -3053,7 +3052,7 @@ h3 {
   padding: 12px;
   border-radius: 16px;
   border: 1px solid rgba(74, 241, 173, 0.15);
-  background: rgba(6, 16, 11, 0.55);
+  background: #f0f4ed;
 }
 
 .admin-main-collapsible .admin-collapsible-summary {
@@ -3086,7 +3085,7 @@ h3 {
 
 .admin-note {
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(25, 63, 49, 0.6);
 }
 
 .admin-actions button:disabled {
@@ -3104,7 +3103,7 @@ h3 {
   font-size: 0.9rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(25, 63, 49, 0.8);
   display: block;
 }
 
@@ -3139,7 +3138,7 @@ h3 {
 
 .status-button.partial {
   border-color: rgba(241, 193, 74, 0.6);
-  color: #f1c14a;
+  color: #88620c;
 }
 
 .status-button.missed {
@@ -3167,7 +3166,7 @@ h3 {
   border-radius: 14px;
   border: 1px solid rgba(74, 241, 173, 0.2);
   padding: 10px 12px;
-  background: rgba(6, 15, 11, 0.7);
+  background: #f0f4ed;
   color: var(--white);
   font-size: 0.85rem;
   font-family: inherit;
@@ -3184,7 +3183,7 @@ h3 {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.18em;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(25, 63, 49, 0.6);
 }
 
 .week-export-actions {
@@ -3925,3 +3924,52 @@ h3 {
     display: none;
   }
 }
+
+/* Aura light: shared portal, authentication and admin surfaces. */
+body.admin-body, body.portal-body { background: #f7f8f2; }
+.noise, .hero-orb, .hero-grid, .scroll-down-cue { display: none; }
+.nav { background: #f7f8f2; border-bottom: 1px solid #d5dfd1; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.glass, .glass-card, .glass-pill { background: #fff; border-color: #d5dfd1; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: 0 3px 14px #153f3108; }
+.glass::after, .glass-card::after, .glass-pill::after { display: none; }
+.btn.primary { background: #0b7a5a; color: #fff; border-color: #0b7a5a; }
+.btn.primary:hover { background: #095e46; }
+.btn.ghost { background: #eaf0e5; border-color: #c4d4c0; }
+.btn:hover { box-shadow: none; transform: none; }
+input, select, textarea, .form-field input, .form-field select, .form-field textarea { background: #fff; color: #193f31; border-color: #bccdbc; }
+input::placeholder, textarea::placeholder { color: #65776b; opacity: 1; }
+.eyebrow, .lead, .form-note, .portal-meta, .admin-hint { color: #53695a; }
+.brand-mark { background: #0b7a5a; box-shadow: none; filter: none; width: 32px; height: 32px; border-radius: 50% 50% 8px 50%; }
+.brand-mark::before, .brand-mark::after { display: none; }
+.portal-body .admin-header { max-width: 1200px; }
+.portal-body .admin-header h1 { font-family: "Space Grotesk",sans-serif; font-size: clamp(2rem,4vw,3.4rem); text-transform: none; letter-spacing: -.06em; line-height: 1.1; }
+.portal-body .admin-header .lead { max-width: 650px; font-size: 1rem; }
+.portal-body .section { padding-top: 140px; }
+.portal-card h3, .admin-login h2 { letter-spacing: .015em; }
+.form-alert.error { color: #982e2e; background: #fff0ec; border-color: #d99184; }
+.form-alert.success { color: #096847; background: #e6f5e9; border-color: #95c6a5; }
+.js .reveal, .js .stagger-item { opacity: 1; transform: none; transition: none; }
+:focus-visible { outline: 3px solid #0b7a5a; outline-offset: 3px; }
+@media(max-width:900px) { .portal-body .section { padding-top: 170px; } }
+
+.plan-item h4, .portal-block-title { color: #193f31; }
+.portal-block, .day-card, .week-card, .plan-week, .training-plan { background-color: #fff; }
+.portal-progress-label, .progress-legend, .plan-meta { color: #53695a; }
+body.portal-body .nav{position:sticky;top:0}body.portal-body .portal-navigation{display:flex;justify-content:space-between;min-height:80px;padding:14px 0}.portal-wordmark{font:800 42px/.85 Arial,sans-serif;letter-spacing:-3px;display:flex;flex-direction:column}.portal-wordmark span{font:700 8px/2.5 Arial,sans-serif;letter-spacing:2.5px;margin-left:3px}.portal-nav-links{display:flex;align-items:center;gap:20px;font-size:13px}body.portal-body>main.section{padding-top:55px}body.portal-login-view .admin-header{max-width:560px;text-align:center;padding:0 0 28px}body.portal-login-view .portal-stack{max-width:520px;width:calc(100% - 40px)}body.portal-login-view .portal-card{padding:30px;border-radius:12px}body.portal-login-view .admin-header h1{font-size:40px}body.portal-login-view .admin-header .lead{font-size:15px}body.portal-body h3{font-family:"Space Grotesk",Arial,sans-serif;text-transform:none;font-size:21px;letter-spacing:-.5px}body.portal-body .btn{letter-spacing:.025em;border-radius:7px;text-transform:none}body.portal-body .form-field label{letter-spacing:.05em;color:#435c4c}body.portal-body .form-field input{border:1px solid #bbcdb9;border-radius:7px;background:white}body.portal-body .portal-nav-links .nav-logout-form{margin:0}
+body.portal-active-view .admin-header{padding:0 0 32px}body.portal-active-view .container{width:min(1200px,calc(100% - 32px));margin-inline:auto}body.portal-active-view .portal-stack{padding:0}body.portal-body .nav-logout-btn{background:#e7efe3;border:1px solid #c4d4c0;box-shadow:none;color:#193f31}body.portal-body .nav-logout-btn:hover{box-shadow:none;background:#dae7d5}
+/* Each day's exercise cards scroll horizontally; the week and days stay in order. */
+.portal-items-row[data-day-exercises]{display:grid;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:min(340px,90%);align-items:start;gap:14px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-padding-inline:2px;padding:4px 2px 16px;scrollbar-width:thin;scrollbar-color:#0b7a5a #eaf0e5}
+.portal-items-row[data-day-exercises]>*{width:100%;min-width:0;scroll-snap-align:start;scroll-margin-inline:2px}
+.portal-items-row[data-day-exercises]::-webkit-scrollbar{height:6px}
+.portal-items-row[data-day-exercises]::-webkit-scrollbar-track{background:#eaf0e5}
+.portal-items-row[data-day-exercises]::-webkit-scrollbar-thumb{background:#0b7a5a;border-radius:5px}
+.day-exercise-navigation{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;min-width:0;margin:12px 0}
+.day-exercise-navigation p{font-size:12px;color:#0b7a5a;margin:0;flex:1 1 160px}
+.day-exercise-controls{display:flex;align-items:center;gap:8px;margin-left:auto}
+.day-exercise-count{font-size:11px;font-variant-numeric:tabular-nums;color:#53695a;white-space:nowrap}
+.day-exercise-arrow{width:36px;height:36px;border:1px solid #bccdbc;border-radius:50%;background:white;color:#193f31;font-size:20px;cursor:pointer}
+.day-exercise-arrow:hover{background:#eaf0e5}
+.day-exercise-arrow:disabled{opacity:.35;cursor:default}
+.day-exercise-arrow[hidden],.day-exercise-navigation p[hidden]{display:none}
+.portal-block .block-exercise-position{font-size:11px;margin:0;color:#53695a}
+@media(max-width:760px){.portal-items-row[data-day-exercises]{grid-auto-columns:92%;gap:12px}.portal-items-row[data-day-exercises] .form-field input,.portal-items-row[data-day-exercises] textarea,.portal-items-row[data-day-exercises] .status-note{font-size:16px}}
+@media(max-width:760px){body.portal-active-view .training-board{padding:12px 8px}body.portal-active-view .training-week-body{padding:12px 6px}body.portal-active-view .day-card{padding:12px 10px}}
