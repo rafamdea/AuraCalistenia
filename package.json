@@ -1,0 +1,13 @@
+{
+  "name": "auracalistenia-hostinger",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hostinger launcher for the AuraCalistenia Python service",
+  "scripts": {
+    "build": "python3 -m pip install --disable-pip-version-check --no-cache-dir --target .python_packages -r requirements.txt",
+    "start": "node hostinger-start.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
