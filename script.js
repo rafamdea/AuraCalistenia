@@ -1263,6 +1263,16 @@ document.addEventListener("DOMContentLoaded", () => {
         renderCoachProgress(user, Number(progressWeekSelect.value || 1));
       });
     }
+    const progressReportLink = document.getElementById("coach_week_report_link");
+    if (progressReportLink) {
+      progressReportLink.addEventListener("click", () => {
+        const user = (planEditor.querySelector('input[name="username"]') || {}).value || "";
+        const week = progressWeekSelect ? Number(progressWeekSelect.value || 1) : 1;
+        progressReportLink.href = `/admin/week/report.pdf?username=${encodeURIComponent(
+          user
+        )}&week=${encodeURIComponent(String(week))}`;
+      });
+    }
 
     planEditor.addEventListener("change", (event) => {
       if (event.target.matches('[data-field="day-rest"]')) {

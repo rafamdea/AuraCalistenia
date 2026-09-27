@@ -264,6 +264,13 @@ class WebTests(unittest.TestCase):
         self.assertIn('/admin/week/report.pdf?username=alumno_demo&amp;week=1', rendered)
         self.assertIn('Descargar PDF semanal', rendered)
 
+    def test_admin_weekly_pdf_link_uses_selected_week_at_click_time(self):
+        script = (app.BASE_DIR / 'script.js').read_text(encoding='utf-8')
+        self.assertIn('progressReportLink.addEventListener("click"', script)
+        self.assertIn('progressWeekSelect.value', script)
+        server_source = (app.BASE_DIR / 'app.py').read_text(encoding='utf-8')
+        self.assertIn('/script.js?v=20260927-admin-week-report-2', server_source)
+
     def test_authenticated_portal_keeps_plan_and_chat(self):
         application={'username':'demo','approved':True,'skill':'Pino','goal':'Equilibrio','plan':app.copy_default_plan()}
         with patch.object(app,'get_session_user',return_value='demo'), patch.object(app,'load_applications',return_value=[application]), patch.object(app,'load_chat_messages',return_value=[]):

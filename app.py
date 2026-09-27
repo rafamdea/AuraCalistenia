@@ -3272,7 +3272,7 @@ def render_password_reset_page(query: dict[str, list[str]]) -> str:
             "    <main class=\"section\">",
             f"      {card}",
             "    </main>",
-            "    <script src=\"/script.js?v=20260910-week-report\"></script>",
+            "    <script src=\"/script.js?v=20260927-admin-week-report-2\"></script>",
             "  </body>",
             "</html>",
         ]
@@ -3314,7 +3314,7 @@ def render_review_page(card_html: str, page_title: str = "Revisar solicitud - Au
             "    <main class=\"section\">",
             f"      {card_html}",
             "    </main>",
-            "    <script src=\"/script.js?v=20260910-week-report\"></script>",
+            "    <script src=\"/script.js?v=20260927-admin-week-report-2\"></script>",
             "  </body>",
             "</html>",
         ]
@@ -4524,7 +4524,7 @@ def render_login_page(error: str | None = None) -> str:
             "        </form>",
             "      </div>",
             "    </main>",
-            "    <script src=\"/script.js?v=20260910-week-report\"></script>",
+            "    <script src=\"/script.js?v=20260927-admin-week-report-2\"></script>",
             "  </body>",
             "</html>",
         ]
