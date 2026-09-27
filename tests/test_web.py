@@ -228,6 +228,42 @@ class WebTests(unittest.TestCase):
         ]:
             self.assertIn(expected, normalized_text)
 
+    def test_admin_can_download_selected_students_weekly_pdf(self):
+        application = {
+            'username': 'alumno_demo', 'name': 'Alumno Demo', 'approved': True,
+            'skill': 'Dominadas', 'goal': 'Mejorar fuerza', 'plan': app.copy_default_plan(),
+        }
+        with patch.object(app, 'get_session_user', return_value='admin'), patch.object(
+            app, 'load_applications', return_value=[application]
+        ):
+            status, headers, body = self.request(
+                '/admin/week/report.pdf?username=alumno_demo&week=1'
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(headers['Content-Type'], 'application/pdf')
+        self.assertIn('informe_alumno.demo_semana_1.pdf', headers['Content-Disposition'])
+        self.assertTrue(body.startswith(b'%PDF'))
+
+    def test_admin_weekly_pdf_requires_admin_session(self):
+        with patch.object(app, 'get_session_user', return_value=None), patch.object(
+            app, 'load_applications', side_effect=AssertionError('Must not load student data')
+        ):
+            status, _, _ = self.request(
+                '/admin/week/report.pdf?username=alumno_demo&week=1'
+            )
+        self.assertEqual(status, 403)
+
+    def test_admin_progress_card_exposes_weekly_pdf_action(self):
+        application = {
+            'username': 'alumno_demo', 'approved': True,
+            'plan': app.copy_default_plan(),
+        }
+        with patch.object(app, 'load_chat_messages', return_value=[]):
+            rendered = app.render_plan_editor([application], 'alumno_demo')
+        self.assertIn('id="coach_week_report_link"', rendered)
+        self.assertIn('/admin/week/report.pdf?username=alumno_demo&amp;week=1', rendered)
+        self.assertIn('Descargar PDF semanal', rendered)
+
     def test_authenticated_portal_keeps_plan_and_chat(self):
         application={'username':'demo','approved':True,'skill':'Pino','goal':'Equilibrio','plan':app.copy_default_plan()}
         with patch.object(app,'get_session_user',return_value='demo'), patch.object(app,'load_applications',return_value=[application]), patch.object(app,'load_chat_messages',return_value=[]):

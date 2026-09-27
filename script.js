@@ -1129,6 +1129,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const doneEl = document.getElementById("coach_progress_done");
       const missedEl = document.getElementById("coach_progress_missed");
       const pendingEl = document.getElementById("coach_progress_pending");
+      const reportLink = document.getElementById("coach_week_report_link");
       const userData = progressData[username];
       const weeks = userData && Array.isArray(userData.weeks) ? userData.weeks : [];
       const targetWeek = Number(weekNumber || (weekSelect ? weekSelect.value : 1) || 1);
@@ -1152,6 +1153,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (doneEl) doneEl.textContent = String(row.done || 0);
       if (missedEl) missedEl.textContent = String(row.missed || 0);
       if (pendingEl) pendingEl.textContent = String(row.pending || 0);
+      if (reportLink) {
+        reportLink.href = `/admin/week/report.pdf?username=${encodeURIComponent(
+          username
+        )}&week=${encodeURIComponent(String(targetWeek))}`;
+      }
     };
 
     const renderCoachChat = (username) => {

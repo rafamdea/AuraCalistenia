@@ -4115,6 +4115,11 @@ def render_plan_editor(applications: list[dict], selected_user: str, expanded: b
             '    <select id="coach_progress_week">',
             week_options_html,
             "    </select>",
+            (
+                '    <a id="coach_week_report_link" class="btn glass ghost small" '
+                f'href="/admin/week/report.pdf?username={urllib.parse.quote(selected_user)}&amp;week=1" '
+                'target="_blank" rel="noopener">Descargar PDF semanal</a>'
+            ),
             "  </div>",
             '  <div class="coach-progress-content">',
             '    <div id="coach_progress_donut" class="coach-progress-donut"><span id="coach_progress_pct">0%</span></div>',
@@ -6341,6 +6346,28 @@ class AuraHandler(SimpleHTTPRequestHandler):
         filename = f"informe_{slugify_username(portal_user)}_semana_{week_number}.pdf"
         self.send_bytes(payload, "application/pdf", filename)
 
+    def handle_admin_week_report_pdf(self, query: dict[str, list[str]]) -> None:
+        """Download a student's weekly report from the authenticated admin panel."""
+        if SimpleDocTemplate is None:
+            self.send_error(HTTPStatus.SERVICE_UNAVAILABLE)
+            return
+        username = (query.get("username") or [""])[0].strip()
+        try:
+            week_number = int((query.get("week") or ["1"])[0])
+        except ValueError:
+            week_number = 1
+        application = find_application(load_applications(), username)
+        if not application:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        try:
+            payload = build_week_report_pdf(application, week_number)
+        except IndexError:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        filename = f"informe_{slugify_username(username)}_semana_{week_number}.pdf"
+        self.send_bytes(payload, "application/pdf", filename)
+
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
@@ -6394,6 +6421,14 @@ class AuraHandler(SimpleHTTPRequestHandler):
                 self.send_error(HTTPStatus.FORBIDDEN)
                 return
             self.handle_export_json()
+            return
+
+        if path == "/admin/week/report.pdf":
+            user = get_session_user(cookie_header, ADMIN_SESSION_COOKIE, "admin")
+            if not user:
+                self.send_error(HTTPStatus.FORBIDDEN)
+                return
+            self.handle_admin_week_report_pdf(query)
             return
 
         if path == "/portal/week/comments.pdf":
